@@ -13,7 +13,10 @@ function applyTheme(mode: ThemeMode) {
   document.documentElement.classList.toggle('dark', dark)
   const meta = document.querySelector('meta[name="theme-color"]')
   if (meta) {
-    meta.setAttribute('content', dark ? '#1a9ea3' : '#0d7377')
+    const bar = getComputedStyle(document.documentElement)
+      .getPropertyValue('--wn-status-bar')
+      .trim()
+    meta.setAttribute('content', bar || (dark ? '#1e2529' : '#eef3f4'))
   }
 }
 

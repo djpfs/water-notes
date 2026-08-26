@@ -39,6 +39,8 @@ const emptyProfile = (): Profile => ({
   goalOverrideMl: null,
   bedtimeHour: 22,
   bedtimeMinute: 0,
+  email: null,
+  photoUrl: null,
 })
 
 function normalizeProfile(raw: Partial<Profile> | undefined): Profile {
@@ -50,6 +52,8 @@ function normalizeProfile(raw: Partial<Profile> | undefined): Profile {
       raw?.goalOverrideMl === undefined ? null : raw.goalOverrideMl,
     bedtimeHour: raw?.bedtimeHour ?? 22,
     bedtimeMinute: raw?.bedtimeMinute ?? 0,
+    email: raw?.email ?? null,
+    photoUrl: raw?.photoUrl ?? null,
   }
 }
 
@@ -251,6 +255,30 @@ export const useAppStore = defineStore(
       theme.value = mode
     }
 
+    function cycleTheme() {
+      const order: ThemeMode[] = ['system', 'light', 'dark']
+      const idx = order.indexOf(theme.value)
+      theme.value = order[(idx + 1) % order.length]
+    }
+
+    function applyGoogleAccount(data: {
+      name?: string | null
+      email?: string | null
+      picture?: string | null
+    }) {
+      const first =
+        data.name?.trim().split(/\s+/).filter(Boolean)[0] ?? ''
+      profile.value = normalizeProfile({
+        ...profile.value,
+        email: data.email ?? profile.value.email,
+        photoUrl: data.picture ?? profile.value.photoUrl,
+        nickname:
+          profile.value.nickname.trim() ||
+          first ||
+          profile.value.nickname,
+      })
+    }
+
     function setNotifications(partial: Partial<NotificationSettings>) {
       notifications.value = normalizeNotifications({
         ...notifications.value,
@@ -360,6 +388,8 @@ export const useAppStore = defineStore(
       markCelebratedToday,
       shouldCelebrate,
       setTheme,
+      cycleTheme,
+      applyGoogleAccount,
       setNotifications,
       dismissInstall,
       clearInstallDismiss,

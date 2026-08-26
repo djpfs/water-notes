@@ -17,8 +17,8 @@ const totalConsumed = computed(() =>
 </script>
 
 <template>
-  <main class="safe-pb safe-pt flex min-h-dvh flex-col px-5 pb-8">
-    <header class="flex items-center gap-3 pt-1">
+  <main class="safe-pb flex min-h-dvh flex-col px-5 pb-8">
+    <header class="app-bar flex items-center gap-3">
       <button
         type="button"
         class="flex h-11 w-11 items-center justify-center rounded-xl bg-mist-deep text-ink"

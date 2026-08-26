@@ -10,9 +10,9 @@ const router = useRouter()
 const store = useAppStore()
 
 const step = ref(0)
-const nickname = ref('')
-const weightKg = ref('70')
-const avatarId = ref('drop')
+const nickname = ref(store.profile.nickname || '')
+const weightKg = ref(String(store.profile.weightKg || 70))
+const avatarId = ref(store.profile.avatarId || 'drop')
 const useCustomGoal = ref(false)
 const customGoal = ref('')
 
@@ -73,11 +73,6 @@ function next() {
 function back() {
   if (step.value > 0) step.value -= 1
 }
-
-function skip() {
-  store.skipOnboarding()
-  router.replace({ name: 'home' })
-}
 </script>
 
 <template>
@@ -87,13 +82,6 @@ function skip() {
         <p class="text-xs font-semibold uppercase tracking-wider text-teal">
           Passo {{ step + 1 }} de 4
         </p>
-        <button
-          type="button"
-          class="text-sm font-semibold text-ink-soft"
-          @click="skip"
-        >
-          Pular
-        </button>
       </div>
       <div class="mt-3 flex gap-1.5">
         <span

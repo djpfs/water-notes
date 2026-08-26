@@ -27,7 +27,7 @@ export default defineConfig({
         name: 'Water Notes',
         short_name: 'Water Notes',
         description: 'Acompanhe sua hidratação diária',
-        theme_color: '#0d7377',
+        theme_color: '#eef3f4',
         background_color: '#e8f2f4',
         display: 'standalone',
         orientation: 'portrait',
@@ -85,6 +85,14 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
+    },
+  },
+  server: {
+    proxy: {
+      '/api': {
+        target: 'http://127.0.0.1:8787',
+        changeOrigin: true,
+      },
     },
   },
 })

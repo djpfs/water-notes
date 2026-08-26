@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { clearAuthCache, fetchMe } from '@/composables/useCloudSync'
 import { useAppStore } from '@/stores/app'
 
 const router = createRouter({
@@ -11,47 +12,66 @@ const router = createRouter({
       meta: { public: true },
     },
     {
+      path: '/entrar',
+      name: 'login',
+      component: () => import('@/views/LoginView.vue'),
+      meta: { public: true },
+    },
+    {
       path: '/onboarding',
       name: 'onboarding',
       component: () => import('@/views/OnboardingView.vue'),
-      meta: { guest: true },
+      meta: { requiresLogin: true, guestOnboard: true },
     },
     {
       path: '/meta',
       name: 'goal-reveal',
       component: () => import('@/views/GoalRevealView.vue'),
-      meta: { requiresAuth: true },
+      meta: { requiresLogin: true, requiresOnboard: true },
     },
     {
       path: '/inicio',
       name: 'home',
       component: () => import('@/views/HomeView.vue'),
-      meta: { requiresAuth: true },
+      meta: { requiresLogin: true, requiresOnboard: true },
     },
     {
       path: '/historico',
       name: 'history',
       component: () => import('@/views/HistoryView.vue'),
-      meta: { requiresAuth: true },
+      meta: { requiresLogin: true, requiresOnboard: true },
     },
     {
       path: '/ajustes',
       name: 'settings',
       component: () => import('@/views/SettingsView.vue'),
-      meta: { requiresAuth: true },
+      meta: { requiresLogin: true, requiresOnboard: true },
     },
   ],
 })
 
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
   const store = useAppStore()
-  const onboarded = store.profile.onboarded
 
-  if (to.meta.guest && onboarded) {
+  if (to.meta.public) return true
+
+  const user = await fetchMe()
+  if (!user) {
+    clearAuthCache()
+    return { name: 'login' }
+  }
+
+  store.applyGoogleAccount({
+    name: user.name,
+    email: user.email,
+    picture: user.picture,
+  })
+
+  if (to.meta.guestOnboard && store.profile.onboarded) {
     return { name: 'home' }
   }
 
-  if (to.meta.requiresAuth && !onboarded) {
+  if (to.meta.requiresOnboard && !store.profile.onboarded) {
     return { name: 'onboarding' }
   }
 

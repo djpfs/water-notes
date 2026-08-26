@@ -1,20 +1,30 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { fetchMe } from '@/composables/useCloudSync'
 import { useAppStore } from '@/stores/app'
 
 const router = useRouter()
 const store = useAppStore()
 
 onMounted(() => {
-  const ms = 1100
-  window.setTimeout(() => {
-    if (store.profile.onboarded) {
-      router.replace({ name: 'home' })
-    } else {
-      router.replace({ name: 'onboarding' })
+  window.setTimeout(async () => {
+    const user = await fetchMe(true)
+    if (!user) {
+      await router.replace({ name: 'login' })
+      return
     }
-  }, ms)
+    store.applyGoogleAccount({
+      name: user.name,
+      email: user.email,
+      picture: user.picture,
+    })
+    if (store.profile.onboarded) {
+      await router.replace({ name: 'home' })
+    } else {
+      await router.replace({ name: 'onboarding' })
+    }
+  }, 900)
 })
 </script>
 

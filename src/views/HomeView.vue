@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AvatarIcon from '@/components/AvatarIcon.vue'
 import CupShortcutBar from '@/components/CupShortcutBar.vue'
@@ -29,6 +29,11 @@ const undoEntry = ref<WaterEntry | null>(null)
 const summaryOpen = ref(false)
 const yesterday = ref<DayStat | null>(null)
 const shareSupported = canShare()
+const themeLabel = computed(() => {
+  if (store.theme === 'dark') return 'Tema escuro'
+  if (store.theme === 'light') return 'Tema claro'
+  return 'Tema do sistema'
+})
 let toastTimer: ReturnType<typeof setTimeout> | undefined
 let dayCheckTimer: ReturnType<typeof setInterval> | undefined
 
@@ -159,39 +164,142 @@ function onVisibility() {
 </script>
 
 <template>
-  <main class="safe-pb safe-pt flex min-h-dvh flex-col px-5 pb-6">
-    <header class="flex items-center justify-between pt-1">
-      <div class="flex items-center gap-3">
-        <AvatarIcon :id="store.profile.avatarId" :size="44" />
-        <div>
+  <main class="safe-pb flex min-h-dvh flex-col px-5 pb-6">
+    <header class="app-bar flex items-center justify-between gap-2">
+      <div class="flex min-w-0 items-center gap-3">
+        <img
+          v-if="store.profile.photoUrl"
+          :src="store.profile.photoUrl"
+          alt=""
+          class="h-11 w-11 shrink-0 rounded-full object-cover ring-1 ring-line"
+          referrerpolicy="no-referrer"
+        />
+        <AvatarIcon v-else :id="store.profile.avatarId" :size="44" />
+        <div class="min-w-0">
           <p class="text-xs font-medium text-ink-soft">Olá,</p>
-          <p class="font-display text-lg font-bold leading-tight text-ink">
+          <p class="truncate font-display text-lg font-bold leading-tight text-ink">
             {{ store.profile.nickname }}
           </p>
         </div>
       </div>
-      <div class="flex items-center gap-1">
+      <div class="flex shrink-0 items-center gap-0.5">
+        <button
+          type="button"
+          class="flex h-10 w-10 items-center justify-center rounded-xl text-ink-soft"
+          :aria-label="themeLabel"
+          @click="store.cycleTheme()"
+        >
+          <svg
+            v-if="store.theme === 'dark'"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-hidden="true"
+          >
+            <path
+              d="M21 14.3A9 9 0 1110.7 3 7 7 0 0021 14.3z"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linejoin="round"
+            />
+          </svg>
+          <svg
+            v-else-if="store.theme === 'light'"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="2" />
+            <path
+              d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+            />
+          </svg>
+          <svg
+            v-else
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-hidden="true"
+          >
+            <rect
+              x="2"
+              y="4"
+              width="20"
+              height="14"
+              rx="2"
+              stroke="currentColor"
+              stroke-width="2"
+            />
+            <path d="M8 20h8" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          </svg>
+        </button>
         <button
           v-if="shareSupported"
           type="button"
-          class="h-11 rounded-xl px-3 text-sm font-semibold text-teal"
+          class="flex h-10 w-10 items-center justify-center rounded-xl text-ink-soft"
+          aria-label="Compartilhar"
           @click="onShare"
         >
-          Compartilhar
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path
+              d="M4 12v7a1 1 0 001 1h14a1 1 0 001-1v-7M16 6l-4-4-4 4M12 2v13"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
         </button>
         <button
           type="button"
-          class="h-11 rounded-xl px-3 text-sm font-semibold text-teal"
+          class="flex h-10 w-10 items-center justify-center rounded-xl text-ink-soft"
+          aria-label="Histórico"
           @click="router.push({ name: 'history' })"
         >
-          Histórico
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path
+              d="M3 12a9 9 0 109-9M3 5v4h4"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+            <path
+              d="M12 7v5l3 2"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
         </button>
         <button
           type="button"
-          class="h-11 rounded-xl px-3 text-sm font-semibold text-teal"
+          class="flex h-10 w-10 items-center justify-center rounded-xl text-ink-soft"
+          aria-label="Ajustes"
           @click="router.push({ name: 'settings' })"
         >
-          Ajustes
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path
+              d="M12 15.5a3.5 3.5 0 100-7 3.5 3.5 0 000 7z"
+              stroke="currentColor"
+              stroke-width="2"
+            />
+            <path
+              d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9c.2.6.7 1 1.4 1.1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
         </button>
       </div>
     </header>

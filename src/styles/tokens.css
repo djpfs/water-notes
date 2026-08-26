@@ -38,6 +38,7 @@
   --wn-bg-a: oklch(0.92 0.04 200);
   --wn-bg-b: oklch(0.93 0.03 185);
   --wn-theme: #0d7377;
+  --wn-status-bar: #eef3f4;
 }
 
 html.dark {
@@ -58,6 +59,7 @@ html.dark {
   --wn-bg-a: oklch(0.28 0.04 200);
   --wn-bg-b: oklch(0.22 0.035 230);
   --wn-theme: #1a9ea3;
+  --wn-status-bar: #1e2529;
   color-scheme: dark;
 }
 
@@ -117,6 +119,19 @@ html.dark {
 
 @utility safe-pt {
   padding-top: max(0.75rem, env(safe-area-inset-top));
+}
+
+@utility app-bar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  margin-left: -1.25rem;
+  margin-right: -1.25rem;
+  padding-left: 1.25rem;
+  padding-right: 1.25rem;
+  padding-top: max(0.75rem, env(safe-area-inset-top));
+  padding-bottom: 0.5rem;
+  background-color: var(--wn-mist);
 }
 
 @utility font-display {

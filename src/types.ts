@@ -7,6 +7,8 @@ export interface Profile {
   goalOverrideMl: number | null
   bedtimeHour: number
   bedtimeMinute: number
+  email: string | null
+  photoUrl: string | null
 }
 
 export interface Cup {
@@ -71,7 +73,7 @@ export const ML_PER_KG = 35
 export const BACKUP_VERSION = 1 as const
 
 export const DEFAULT_CUPS: Cup[] = [
-  { id: 'cup-150', label: 'Shot', ml: 150 },
+  { id: 'cup-150', label: 'Dose', ml: 150 },
   { id: 'cup-250', label: 'Copo', ml: 250 },
   { id: 'cup-350', label: 'Caneca', ml: 350 },
   { id: 'cup-500', label: 'Garrafa', ml: 500 },
