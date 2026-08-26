@@ -10,14 +10,13 @@ npm run dev
 npm run build
 ```
 
-## Cloudflare Pages
+## Cloudflare (Worker + static assets)
 
-Build settings:
+Crie um **Worker** (não Pages) ligado ao repo, ou no projeto atual use:
 
 | Campo | Valor |
 |-------|--------|
 | Build command | `npm run build` |
-| Build output directory | `dist` |
-| Deploy command | `npx wrangler pages deploy dist --project-name=water-notes` |
+| Deploy command | `npx wrangler deploy` |
 
-Não use `wrangler deploy` (isso é Worker). Use `wrangler pages deploy`.
+O `wrangler.toml` serve a pasta `dist` com fallback SPA.
