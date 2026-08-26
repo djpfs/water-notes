@@ -3,23 +3,30 @@ import { computed, ref } from 'vue'
 import {
   BACKUP_VERSION,
   DEFAULT_CUPS,
+  DEFAULT_FEEDBACK,
   DEFAULT_NOTIFICATIONS,
-  ML_PER_KG,
   type AppBackup,
   type Cup,
   type DayStat,
+  type FeedbackSettings,
   type NotificationSettings,
   type Profile,
   type ThemeMode,
   type WaterEntry,
 } from '@/types'
-import {
-  addDays,
-  hoursUntilBedtime,
-  localDateKey,
-  snapMl,
-} from '@/utils/date'
+import { addDays, hoursUntilBedtime, localDateKey, snapMl } from '@/utils/date'
 import { createId } from '@/utils/id'
+import {
+  buildDayStat,
+  computeStreak,
+  goalForDateKey,
+  missedDayKeys,
+  pruneEntriesBefore,
+  pruneSnapshotsBefore,
+  resolveDailyGoalMl,
+} from '@/utils/storeLogic'
+
+const KEEP_DAYS = 90
 
 function normalizeNotifications(
   raw: Partial<NotificationSettings> | undefined,
@@ -28,6 +35,15 @@ function normalizeNotifications(
     ...DEFAULT_NOTIFICATIONS,
     ...raw,
     pauseWhenGoalReached: raw?.pauseWhenGoalReached !== false,
+  }
+}
+
+function normalizeFeedback(
+  raw: Partial<FeedbackSettings> | undefined,
+): FeedbackSettings {
+  return {
+    ...DEFAULT_FEEDBACK,
+    ...raw,
   }
 }
 
@@ -70,19 +86,22 @@ export const useAppStore = defineStore(
     const celebratedDate = ref<string | null>(null)
     const theme = ref<ThemeMode>('system')
     const notifications = ref<NotificationSettings>({ ...DEFAULT_NOTIFICATIONS })
+    const feedback = ref<FeedbackSettings>({ ...DEFAULT_FEEDBACK })
     const installDismissedAt = ref<string | null>(null)
     const lastActiveDate = ref<string | null>(null)
     const lastSummaryDate = ref<string | null>(null)
+    const dailyGoalSnapshots = ref<Record<string, number>>({})
 
     const defaultGoalMl = computed(() =>
-      Math.round(Math.max(0, profile.value.weightKg) * ML_PER_KG),
+      resolveDailyGoalMl(profile.value.weightKg, null),
     )
 
-    const dailyGoalMl = computed(() => {
-      const override = profile.value.goalOverrideMl
-      if (override != null && override > 0) return Math.round(override)
-      return defaultGoalMl.value
-    })
+    const dailyGoalMl = computed(() =>
+      resolveDailyGoalMl(
+        profile.value.weightKg,
+        profile.value.goalOverrideMl,
+      ),
+    )
 
     const todayKey = computed(() => localDateKey())
 
@@ -118,20 +137,20 @@ export const useAppStore = defineStore(
       return snapMl(remainingMl.value / hours)
     })
 
-    function consumedOn(dateKey: string): number {
-      return entries.value
-        .filter((e) => localDateKey(new Date(e.at)) === dateKey)
-        .reduce((sum, e) => sum + e.ml, 0)
+    function goalForDate(dateKey: string): number {
+      return goalForDateKey(
+        dateKey,
+        dailyGoalSnapshots.value,
+        dailyGoalMl.value,
+      )
     }
 
-    function dayStat(dateKey: string, goalMl = dailyGoalMl.value): DayStat {
-      const consumedMl = consumedOn(dateKey)
-      return {
-        date: dateKey,
-        consumedMl,
-        goalMl,
-        reached: goalMl > 0 && consumedMl >= goalMl,
-      }
+    function ensureTodayGoalSnapshot() {
+      dailyGoalSnapshots.value[todayKey.value] = dailyGoalMl.value
+    }
+
+    function dayStat(dateKey: string): DayStat {
+      return buildDayStat(dateKey, entries.value, goalForDate(dateKey))
     }
 
     function historyDays(days: number): DayStat[] {
@@ -143,21 +162,24 @@ export const useAppStore = defineStore(
       return list
     }
 
-    const streak = computed(() => {
-      let count = 0
-      let cursor = todayKey.value
-      const today = dayStat(cursor)
-      if (!today.reached) {
-        cursor = addDays(cursor, -1)
-      }
-      for (let i = 0; i < 365; i += 1) {
-        const stat = dayStat(cursor)
-        if (!stat.reached) break
-        count += 1
-        cursor = addDays(cursor, -1)
-      }
-      return count
-    })
+    const streak = computed(() =>
+      computeStreak(
+        todayKey.value,
+        entries.value,
+        dailyGoalSnapshots.value,
+        dailyGoalMl.value,
+      ),
+    )
+
+    function pruneOldData() {
+      const today = localDateKey()
+      entries.value = pruneEntriesBefore(entries.value, KEEP_DAYS, today)
+      dailyGoalSnapshots.value = pruneSnapshotsBefore(
+        dailyGoalSnapshots.value,
+        KEEP_DAYS,
+        today,
+      )
+    }
 
     function completeOnboarding(data: {
       nickname: string
@@ -179,6 +201,7 @@ export const useAppStore = defineStore(
             : data.goalOverrideMl,
       })
       lastActiveDate.value = localDateKey()
+      ensureTodayGoalSnapshot()
     }
 
     function skipOnboarding() {
@@ -199,6 +222,7 @@ export const useAppStore = defineStore(
             ? partial.nickname.trim()
             : profile.value.nickname,
       })
+      ensureTodayGoalSnapshot()
     }
 
     function addEntry(ml: number, at = new Date().toISOString()): WaterEntry | null {
@@ -209,6 +233,8 @@ export const useAppStore = defineStore(
         at,
       }
       entries.value.push(entry)
+      ensureTodayGoalSnapshot()
+      pruneOldData()
       return entry
     }
 
@@ -227,6 +253,7 @@ export const useAppStore = defineStore(
     function restoreEntry(entry: WaterEntry) {
       if (entries.value.some((e) => e.id === entry.id)) return
       entries.value.push(entry)
+      pruneOldData()
     }
 
     function addCup(label: string, ml: number) {
@@ -296,6 +323,13 @@ export const useAppStore = defineStore(
       })
     }
 
+    function setFeedback(partial: Partial<FeedbackSettings>) {
+      feedback.value = normalizeFeedback({
+        ...feedback.value,
+        ...partial,
+      })
+    }
+
     function dismissInstall() {
       installDismissedAt.value = new Date().toISOString()
     }
@@ -304,26 +338,35 @@ export const useAppStore = defineStore(
       installDismissedAt.value = null
     }
 
-    function peekYesterdaySummary(): DayStat | null {
+    function peekMissedSummaries(): DayStat[] {
       const today = localDateKey()
-      if (lastActiveDate.value === today) return null
-      if (lastSummaryDate.value === today) return null
-      if (!lastActiveDate.value) {
-        lastActiveDate.value = today
-        return null
+      if (lastSummaryDate.value === today) return []
+      if (!lastActiveDate.value || lastActiveDate.value >= today) {
+        if (!lastActiveDate.value) lastActiveDate.value = today
+        ensureTodayGoalSnapshot()
+        return []
       }
-      const yesterday = addDays(today, -1)
-      return dayStat(yesterday)
+      return missedDayKeys(lastActiveDate.value, today).map((key) =>
+        dayStat(key),
+      )
+    }
+
+    /** @deprecated use peekMissedSummaries */
+    function peekYesterdaySummary(): DayStat | null {
+      const summaries = peekMissedSummaries()
+      return summaries.length === 1 ? summaries[0] : summaries[0] ?? null
     }
 
     function acknowledgeDayRollover() {
       const today = localDateKey()
       lastActiveDate.value = today
       lastSummaryDate.value = today
+      ensureTodayGoalSnapshot()
     }
 
     function touchActiveDate() {
       lastActiveDate.value = localDateKey()
+      ensureTodayGoalSnapshot()
     }
 
     function exportBackup(): AppBackup {
@@ -335,10 +378,12 @@ export const useAppStore = defineStore(
         entries: entries.value.map((e) => ({ ...e })),
         theme: theme.value,
         notifications: { ...notifications.value },
+        feedback: { ...feedback.value },
         celebratedDate: celebratedDate.value,
         installDismissedAt: installDismissedAt.value,
         lastActiveDate: lastActiveDate.value,
         lastSummaryDate: lastSummaryDate.value,
+        dailyGoalSnapshots: { ...dailyGoalSnapshots.value },
       }
     }
 
@@ -358,10 +403,14 @@ export const useAppStore = defineStore(
       entries.value = raw.entries.map((e) => ({ ...e }))
       theme.value = raw.theme ?? 'system'
       notifications.value = normalizeNotifications(raw.notifications)
+      feedback.value = normalizeFeedback(raw.feedback)
       celebratedDate.value = raw.celebratedDate ?? null
       installDismissedAt.value = raw.installDismissedAt ?? null
       lastActiveDate.value = raw.lastActiveDate ?? localDateKey()
       lastSummaryDate.value = raw.lastSummaryDate ?? null
+      dailyGoalSnapshots.value = { ...(raw.dailyGoalSnapshots ?? {}) }
+      ensureTodayGoalSnapshot()
+      pruneOldData()
     }
 
     function resetAll() {
@@ -371,9 +420,11 @@ export const useAppStore = defineStore(
       celebratedDate.value = null
       theme.value = 'system'
       notifications.value = { ...DEFAULT_NOTIFICATIONS }
+      feedback.value = { ...DEFAULT_FEEDBACK }
       installDismissedAt.value = null
       lastActiveDate.value = null
       lastSummaryDate.value = null
+      dailyGoalSnapshots.value = {}
     }
 
     return {
@@ -383,9 +434,11 @@ export const useAppStore = defineStore(
       celebratedDate,
       theme,
       notifications,
+      feedback,
       installDismissedAt,
       lastActiveDate,
       lastSummaryDate,
+      dailyGoalSnapshots,
       defaultGoalMl,
       dailyGoalMl,
       todayEntries,
@@ -397,6 +450,7 @@ export const useAppStore = defineStore(
       streak,
       historyDays,
       dayStat,
+      goalForDate,
       completeOnboarding,
       skipOnboarding,
       updateProfile,
@@ -413,8 +467,10 @@ export const useAppStore = defineStore(
       cycleTheme,
       applyGoogleAccount,
       setNotifications,
+      setFeedback,
       dismissInstall,
       clearInstallDismiss,
+      peekMissedSummaries,
       peekYesterdaySummary,
       acknowledgeDayRollover,
       touchActiveDate,
@@ -432,19 +488,39 @@ export const useAppStore = defineStore(
         'celebratedDate',
         'theme',
         'notifications',
+        'feedback',
         'installDismissedAt',
         'lastActiveDate',
         'lastSummaryDate',
+        'dailyGoalSnapshots',
       ],
       afterHydrate: (ctx) => {
         const store = ctx.store as unknown as {
           profile: Profile
           notifications: NotificationSettings
+          feedback: FeedbackSettings
+          dailyGoalSnapshots: Record<string, number>
+          entries: WaterEntry[]
         }
         Object.assign(store.profile, normalizeProfile(store.profile))
         Object.assign(
           store.notifications,
           normalizeNotifications(store.notifications),
+        )
+        Object.assign(store.feedback, normalizeFeedback(store.feedback))
+        store.dailyGoalSnapshots = store.dailyGoalSnapshots ?? {}
+        const today = localDateKey()
+        if (!store.dailyGoalSnapshots[today]) {
+          store.dailyGoalSnapshots[today] = resolveDailyGoalMl(
+            store.profile.weightKg,
+            store.profile.goalOverrideMl,
+          )
+        }
+        store.entries = pruneEntriesBefore(store.entries ?? [], KEEP_DAYS, today)
+        store.dailyGoalSnapshots = pruneSnapshotsBefore(
+          store.dailyGoalSnapshots,
+          KEEP_DAYS,
+          today,
         )
       },
     },

@@ -1,4 +1,4 @@
-import { formatTime, formatVolume } from '@/utils/date'
+import { formatVolume } from '@/utils/date'
 
 export type ShareCardInput = {
   nickname: string
@@ -9,11 +9,10 @@ export type ShareCardInput = {
   progress: number
   streak: number
   goalReached: boolean
-  entries: { ml: number; at: string }[]
 }
 
 const W = 1080
-const H = 1350
+const H = 1920
 
 const colors = {
   bgA: '#b8e8ef',
@@ -25,9 +24,7 @@ const colors = {
   tealDeep: '#095558',
   tealLight: '#5ec4c9',
   water: '#6ec8d8',
-  waterDeep: '#3a9eb0',
   line: '#dce8ea',
-  amber: '#e8a735',
 }
 
 function roundRect(
@@ -56,12 +53,12 @@ function drawBackground(ctx: CanvasRenderingContext2D) {
   ctx.fillStyle = bg
   ctx.fillRect(0, 0, W, H)
 
-  ctx.globalAlpha = 0.35
+  ctx.globalAlpha = 0.3
   for (const b of [
-    { x: 120, y: 180, r: 90 },
-    { x: 920, y: 260, r: 70 },
-    { x: 880, y: 1100, r: 110 },
-    { x: 140, y: 1180, r: 60 },
+    { x: 100, y: 220, r: 100 },
+    { x: 960, y: 340, r: 80 },
+    { x: 900, y: 1580, r: 120 },
+    { x: 120, y: 1700, r: 70 },
   ]) {
     ctx.beginPath()
     ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2)
@@ -128,7 +125,7 @@ function drawProgressRing(
   radius: number,
   progress: number,
 ) {
-  const line = 28
+  const line = 32
   ctx.lineCap = 'round'
 
   ctx.beginPath()
@@ -166,6 +163,38 @@ function drawDrop(ctx: CanvasRenderingContext2D, cx: number, cy: number, scale: 
   ctx.restore()
 }
 
+function drawStatPill(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  y: number,
+  label: string,
+  value: string,
+) {
+  ctx.font = '600 22px Manrope, system-ui, sans-serif'
+  const labelW = ctx.measureText(label).width
+  ctx.font = '700 34px Manrope, system-ui, sans-serif'
+  const valueW = ctx.measureText(value).width
+  const pillW = Math.max(labelW, valueW) + 64
+  const pillH = 96
+  const px = cx - pillW / 2
+
+  roundRect(ctx, px, y, pillW, pillH, 20)
+  ctx.fillStyle = '#f6fbfc'
+  ctx.fill()
+  ctx.strokeStyle = colors.line
+  ctx.lineWidth = 2
+  ctx.stroke()
+
+  ctx.textAlign = 'center'
+  ctx.fillStyle = colors.inkSoft
+  ctx.font = '600 22px Manrope, system-ui, sans-serif'
+  ctx.fillText(label, cx, y + 36)
+
+  ctx.fillStyle = colors.ink
+  ctx.font = '700 34px Manrope, system-ui, sans-serif'
+  ctx.fillText(value, cx, y + 74)
+}
+
 export async function renderShareCard(input: ShareCardInput): Promise<Blob> {
   await document.fonts.ready
 
@@ -177,16 +206,15 @@ export async function renderShareCard(input: ShareCardInput): Promise<Blob> {
 
   const pct = Math.round(Math.min(100, Math.max(0, input.progress * 100)))
   const photo = input.photoUrl ? await loadPhoto(input.photoUrl) : null
-  const entries = input.entries.slice(0, 8)
-  const hidden = Math.max(0, input.entries.length - entries.length)
+  const remainingMl = Math.max(0, input.goalMl - input.consumedMl)
 
   drawBackground(ctx)
 
-  // Card principal
-  const cardX = 72
-  const cardY = 120
-  const cardW = W - 144
-  const cardH = H - 240
+  const cardX = 64
+  const cardY = 140
+  const cardW = W - 128
+  const cardH = H - 280
+
   ctx.shadowColor = 'rgba(13, 115, 119, 0.18)'
   ctx.shadowBlur = 48
   ctx.shadowOffsetY = 16
@@ -195,127 +223,74 @@ export async function renderShareCard(input: ShareCardInput): Promise<Blob> {
   ctx.fill()
   ctx.shadowColor = 'transparent'
 
-  // Header
-  drawAvatar(ctx, cardX + 48, cardY + 48, 88, input.nickname, photo)
+  const pad = 56
+  drawAvatar(ctx, cardX + pad, cardY + pad, 96, input.nickname, photo)
 
   ctx.textAlign = 'left'
   ctx.fillStyle = colors.inkSoft
   ctx.font = '600 28px Manrope, system-ui, sans-serif'
-  ctx.fillText('Hidratação de hoje', cardX + 160, cardY + 78)
+  ctx.fillText('Hidratação de hoje', cardX + pad + 116, cardY + pad + 28)
 
   ctx.fillStyle = colors.ink
-  ctx.font = '700 44px "Bricolage Grotesque", Manrope, system-ui, sans-serif'
-  ctx.fillText(input.nickname || 'Eu', cardX + 160, cardY + 128)
+  ctx.font = '700 48px "Bricolage Grotesque", Manrope, system-ui, sans-serif'
+  ctx.fillText(input.nickname || 'Eu', cardX + pad + 116, cardY + pad + 82)
 
   ctx.fillStyle = colors.inkSoft
   ctx.font = '500 26px Manrope, system-ui, sans-serif'
-  ctx.fillText(input.dateLabel, cardX + 160, cardY + 162)
+  ctx.fillText(input.dateLabel, cardX + pad + 116, cardY + pad + 120)
 
   if (input.streak > 0) {
-    const badge = `${input.streak} dia${input.streak === 1 ? '' : 's'} 🔥`
+    const badge = `${input.streak} dia${input.streak === 1 ? '' : 's'} seguidos`
     ctx.font = '700 24px Manrope, system-ui, sans-serif'
-    const tw = ctx.measureText(badge).width + 40
-    const bx = cardX + cardW - tw - 40
-    const by = cardY + 52
-    roundRect(ctx, bx, by, tw, 48, 24)
+    const tw = ctx.measureText(badge).width + 48
+    const bx = cardX + cardW - tw - pad
+    const by = cardY + pad + 8
+    roundRect(ctx, bx, by, tw, 52, 26)
     ctx.fillStyle = '#e6f7f8'
     ctx.fill()
     ctx.fillStyle = colors.tealDeep
     ctx.textAlign = 'center'
-    ctx.fillText(badge, bx + tw / 2, by + 32)
+    ctx.fillText(badge, bx + tw / 2, by + 34)
     ctx.textAlign = 'left'
   }
 
-  // Anel de progresso
   const ringCx = cardX + cardW / 2
-  const ringCy = cardY + 340
-  drawProgressRing(ctx, ringCx, ringCy, 150, input.progress)
+  const ringCy = cardY + cardH * 0.46
+  drawProgressRing(ctx, ringCx, ringCy, 200, input.progress)
 
   ctx.textAlign = 'center'
   ctx.fillStyle = colors.ink
-  ctx.font = '800 96px "Bricolage Grotesque", Manrope, system-ui, sans-serif'
-  ctx.fillText(`${pct}%`, ringCx, ringCy + 24)
+  ctx.font = '800 112px "Bricolage Grotesque", Manrope, system-ui, sans-serif'
+  ctx.fillText(`${pct}%`, ringCx, ringCy + 28)
 
   ctx.fillStyle = colors.inkSoft
-  ctx.font = '600 30px Manrope, system-ui, sans-serif'
+  ctx.font = '600 34px Manrope, system-ui, sans-serif'
   ctx.fillText(
     `${formatVolume(input.consumedMl)} / ${formatVolume(input.goalMl)}`,
     ringCx,
-    ringCy + 72,
+    ringCy + 88,
   )
 
   if (input.goalReached) {
-    ctx.font = '700 26px Manrope, system-ui, sans-serif'
+    ctx.font = '700 30px Manrope, system-ui, sans-serif'
     ctx.fillStyle = colors.teal
-    ctx.fillText('Meta batida ✓', ringCx, ringCy + 112)
-  }
-
-  // Lista do dia
-  const listX = cardX + 48
-  const listY = cardY + 530
-  const listW = cardW - 96
-
-  ctx.textAlign = 'left'
-  ctx.fillStyle = colors.inkSoft
-  ctx.font = '700 22px Manrope, system-ui, sans-serif'
-  ctx.fillText('REGISTROS DE HOJE', listX, listY)
-
-  roundRect(ctx, listX, listY + 20, listW, 420, 28)
-  ctx.fillStyle = '#f6fbfc'
-  ctx.fill()
-  ctx.strokeStyle = colors.line
-  ctx.lineWidth = 2
-  ctx.stroke()
-
-  if (entries.length === 0) {
-    ctx.textAlign = 'center'
+    ctx.fillText('Meta batida ✓', ringCx, ringCy + 132)
+  } else if (remainingMl > 0) {
+    ctx.font = '600 28px Manrope, system-ui, sans-serif'
     ctx.fillStyle = colors.inkSoft
-    ctx.font = '500 28px Manrope, system-ui, sans-serif'
-    ctx.fillText('Nenhum registro ainda', listX + listW / 2, listY + 240)
-    ctx.font = '400 24px Manrope, system-ui, sans-serif'
-    ctx.fillText('Cada gole conta 💧', listX + listW / 2, listY + 280)
-  } else {
-    let rowY = listY + 68
-    for (const entry of entries) {
-      ctx.textAlign = 'left'
-      roundRect(ctx, listX + 24, rowY - 28, 100, 44, 12)
-      ctx.fillStyle = '#ffffff'
-      ctx.fill()
-      ctx.strokeStyle = colors.line
-      ctx.lineWidth = 1.5
-      ctx.stroke()
-      ctx.fillStyle = colors.inkSoft
-      ctx.font = '600 22px Manrope, system-ui, sans-serif'
-      ctx.fillText(formatTime(entry.at), listX + 36, rowY)
-
-      ctx.fillStyle = colors.ink
-      ctx.font = '700 30px Manrope, system-ui, sans-serif'
-      ctx.fillText(formatVolume(entry.ml), listX + 150, rowY)
-
-      ctx.strokeStyle = colors.line
-      ctx.lineWidth = 1
-      ctx.beginPath()
-      ctx.moveTo(listX + 24, rowY + 22)
-      ctx.lineTo(listX + listW - 24, rowY + 22)
-      ctx.stroke()
-
-      rowY += 52
-    }
-
-    if (hidden > 0) {
-      ctx.fillStyle = colors.inkSoft
-      ctx.font = '600 24px Manrope, system-ui, sans-serif'
-      ctx.textAlign = 'center'
-      ctx.fillText(`+ ${hidden} registro${hidden === 1 ? '' : 's'}`, listX + listW / 2, rowY + 8)
-    }
+    ctx.fillText(`Faltam ${formatVolume(remainingMl)}`, ringCx, ringCy + 132)
   }
 
-  // Footer branding
-  drawDrop(ctx, cardX + cardW / 2, cardY + cardH - 88, 1.4)
+  const statsY = ringCy + 280
+  drawStatPill(ctx, ringCx - 180, statsY, 'Consumido', formatVolume(input.consumedMl))
+  drawStatPill(ctx, ringCx + 180, statsY, 'Meta', formatVolume(input.goalMl))
+
+  const footerY = cardY + cardH - pad - 72
+  drawDrop(ctx, ringCx, footerY - 28, 1.5)
   ctx.textAlign = 'center'
   ctx.fillStyle = colors.tealDeep
-  ctx.font = '800 36px "Bricolage Grotesque", Manrope, system-ui, sans-serif'
-  ctx.fillText('Water Notes', cardX + cardW / 2, cardY + cardH - 36)
+  ctx.font = '800 38px "Bricolage Grotesque", Manrope, system-ui, sans-serif'
+  ctx.fillText('Water Notes', ringCx, footerY + 36)
 
   return new Promise((resolve, reject) => {
     canvas.toBlob(

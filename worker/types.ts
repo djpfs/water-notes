@@ -12,10 +12,12 @@ export type SyncPayload = {
   entries: unknown
   theme: unknown
   notifications: unknown
+  feedback?: unknown
   celebratedDate: string | null
   installDismissedAt: string | null
   lastActiveDate: string | null
   lastSummaryDate: string | null
+  dailyGoalSnapshots?: Record<string, number>
 }
 
 export type UserRow = {

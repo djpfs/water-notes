@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { fileURLToPath, URL } from 'node:url'
 import { readFileSync } from 'node:fs'
 import tailwindcss from '@tailwindcss/vite'
@@ -12,6 +13,11 @@ const pkg = JSON.parse(
 export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
+  },
+  test: {
+    environment: 'happy-dom',
+    globals: true,
+    include: ['src/**/*.test.ts'],
   },
   plugins: [
     vue(),

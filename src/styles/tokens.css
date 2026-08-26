@@ -109,6 +109,12 @@ html.dark {
     touch-action: manipulation;
   }
 
+  button:not(:disabled):active,
+  [role='button']:not([aria-disabled='true']):active {
+    transform: scale(0.97);
+    transition: transform 0.12s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
   @media (prefers-reduced-motion: reduce) {
     *,
     *::before,

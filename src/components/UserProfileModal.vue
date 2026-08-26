@@ -30,6 +30,7 @@ function openSettings() {
       <div
         v-if="open"
         class="fixed inset-0 z-[65] flex items-end justify-center bg-ink/45 p-0 sm:items-center sm:p-5"
+        data-haptic="off"
         role="dialog"
         aria-modal="true"
         aria-labelledby="profile-modal-title"

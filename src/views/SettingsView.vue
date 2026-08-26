@@ -20,14 +20,17 @@ import {
   setNotificationInterval,
   updateNotificationSettings,
 } from '@/composables/useNotifications'
+import { useToast } from '@/composables/useToast'
 import { useAppStore } from '@/stores/app'
 import { ML_PER_KG, NOTIFICATION_INTERVALS, type ThemeMode } from '@/types'
 import { formatVolume } from '@/utils/date'
+import { goBackOr } from '@/utils/navigation'
 import { formatClock, parseClock } from '@/utils/timeWindow'
 import { APP_VERSION } from '@/version'
 
 const router = useRouter()
 const store = useAppStore()
+const { show: showToast } = useToast()
 
 const search = ref('')
 const cloudUser = ref<AuthUser | null>(null)
@@ -48,7 +51,6 @@ const bedtime = ref(
 )
 const notifError = ref('')
 const notifBusy = ref(false)
-const notifMsg = ref('')
 const windowStart = ref(
   formatClock(
     store.notifications.windowStartHour ?? 8,
@@ -64,10 +66,11 @@ const windowEnd = ref(
 const pauseWhenGoalReached = ref(
   store.notifications.pauseWhenGoalReached !== false,
 )
-const backupMsg = ref('')
-const profileMsg = ref('')
-const metaMsg = ref('')
+const importConfirmOpen = ref(false)
+const pendingImport = ref<unknown>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
+const feedbackSound = ref(store.feedback.sound)
+const feedbackHaptic = ref(store.feedback.haptic)
 
 const cupSheetOpen = ref(false)
 const cupSheetMode = ref<'add' | 'edit'>('add')
@@ -119,7 +122,8 @@ const sections: Section[] = [
   { id: 'perfil', title: 'Perfil', keywords: 'perfil apelido peso avatar foto' },
   { id: 'meta', title: 'Meta', keywords: 'meta ml peso objetivo dormir horário' },
   { id: 'lembretes', title: 'Lembretes', keywords: 'lembretes notificação intervalo janela pausar' },
-  { id: 'aparencia', title: 'Aparência', keywords: 'aparência tema claro escuro sistema' },
+  { id: 'aparencia', title: 'Aparência', keywords: 'aparência tema claro escuro sistema feedback som haptic' },
+  { id: 'feedback', title: 'Feedback', keywords: 'feedback som haptic vibração toque' },
   { id: 'copos', title: 'Copos', keywords: 'copos atalhos volume garrafa caneca' },
   { id: 'dados', title: 'Dados', keywords: 'dados backup exportar importar' },
   { id: 'sobre', title: 'Sobre', keywords: 'sobre versão app' },
@@ -159,7 +163,7 @@ function saveProfileFields() {
     avatarId: avatarId.value,
     useProfilePhoto: useProfilePhoto.value,
   })
-  profileMsg.value = 'Perfil salvo.'
+  showToast('Perfil salvo.')
 }
 
 function saveMeta() {
@@ -168,7 +172,15 @@ function saveMeta() {
     goalOverrideMl: useCustomGoal.value ? customGoalNumber.value : null,
     ...parseBedtime(),
   })
-  metaMsg.value = 'Meta salva.'
+  showToast('Meta salva.')
+}
+
+function saveFeedback() {
+  store.setFeedback({
+    sound: feedbackSound.value,
+    haptic: feedbackHaptic.value,
+  })
+  showToast('Feedback salvo.')
 }
 
 function openAddCup() {
@@ -309,16 +321,15 @@ async function saveReminderWindow() {
     windowEndMinute: end.minute,
     pauseWhenGoalReached: pauseWhenGoalReached.value,
   })
-  notifMsg.value = 'Lembretes atualizados.'
+  showToast('Lembretes atualizados.')
 }
 
 async function onTestNotification() {
   notifError.value = ''
-  notifMsg.value = ''
   notifBusy.value = true
   try {
     await sendTestNotification()
-    notifMsg.value = 'Notificação de teste enviada.'
+    showToast('Notificação de teste enviada.')
   } catch (err) {
     notifError.value =
       err instanceof Error ? err.message : 'Falha ao testar notificação.'
@@ -338,7 +349,28 @@ function exportBackup() {
   a.download = `water-notes-backup-${new Date().toISOString().slice(0, 10)}.json`
   a.click()
   URL.revokeObjectURL(url)
-  backupMsg.value = 'Backup exportado.'
+  showToast('Backup exportado.')
+}
+
+function applyImport(data: unknown) {
+  store.importBackup(data)
+  nickname.value = store.profile.nickname
+  weightKg.value = String(store.profile.weightKg)
+  avatarId.value = store.profile.avatarId
+  useProfilePhoto.value = store.profile.useProfilePhoto
+  useCustomGoal.value = store.profile.goalOverrideMl != null
+  customGoal.value = String(
+    store.profile.goalOverrideMl ?? store.defaultGoalMl,
+  )
+  bedtime.value = `${String(store.profile.bedtimeHour).padStart(2, '0')}:${String(store.profile.bedtimeMinute).padStart(2, '0')}`
+  feedbackSound.value = store.feedback.sound
+  feedbackHaptic.value = store.feedback.haptic
+  showToast('Backup importado.')
+}
+
+function confirmImport() {
+  if (pendingImport.value) applyImport(pendingImport.value)
+  pendingImport.value = null
 }
 
 async function onImportFile(event: Event) {
@@ -347,20 +379,12 @@ async function onImportFile(event: Event) {
   if (!file) return
   try {
     const text = await file.text()
-    store.importBackup(JSON.parse(text))
-    nickname.value = store.profile.nickname
-    weightKg.value = String(store.profile.weightKg)
-    avatarId.value = store.profile.avatarId
-    useProfilePhoto.value = store.profile.useProfilePhoto
-    useCustomGoal.value = store.profile.goalOverrideMl != null
-    customGoal.value = String(
-      store.profile.goalOverrideMl ?? store.defaultGoalMl,
-    )
-    bedtime.value = `${String(store.profile.bedtimeHour).padStart(2, '0')}:${String(store.profile.bedtimeMinute).padStart(2, '0')}`
-    backupMsg.value = 'Backup importado.'
+    pendingImport.value = JSON.parse(text)
+    importConfirmOpen.value = true
   } catch (err) {
-    backupMsg.value =
-      err instanceof Error ? err.message : 'Falha ao importar backup.'
+    showToast(
+      err instanceof Error ? err.message : 'Falha ao importar backup.',
+    )
   } finally {
     input.value = ''
   }
@@ -375,7 +399,7 @@ async function onImportFile(event: Event) {
           type="button"
           class="flex h-11 w-11 items-center justify-center rounded-xl bg-mist-deep text-ink"
           aria-label="Voltar"
-          @click="router.back()"
+          @click="goBackOr(router, { name: 'home' })"
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path
@@ -523,7 +547,6 @@ async function onImportFile(event: Event) {
       >
         Salvar perfil
       </button>
-      <p v-if="profileMsg" class="mt-2 px-1 text-sm text-teal-deep">{{ profileMsg }}</p>
     </section>
 
     <section v-if="show('meta')" class="mt-7">
@@ -572,7 +595,6 @@ async function onImportFile(event: Event) {
       >
         Salvar meta
       </button>
-      <p v-if="metaMsg" class="mt-2 px-1 text-sm text-teal-deep">{{ metaMsg }}</p>
     </section>
 
     <section v-if="show('lembretes')" class="mt-7">
@@ -659,8 +681,11 @@ async function onImportFile(event: Event) {
           Testar notificação
         </button>
       </div>
+      <p class="mt-2 px-1 text-xs text-ink-soft">
+        Com o app fechado, o Chrome pode levar até ~12 horas para disparar lembretes em segundo plano.
+        Com o app aberto, o intervalo escolhido vale normalmente.
+      </p>
       <p v-if="notifError" class="mt-2 px-1 text-sm text-amber-deep">{{ notifError }}</p>
-      <p v-if="notifMsg" class="mt-2 px-1 text-sm text-teal-deep">{{ notifMsg }}</p>
     </section>
 
     <section v-if="show('aparencia')" class="mt-7">
@@ -683,6 +708,37 @@ async function onImportFile(event: Event) {
           {{ item.label }}
         </button>
       </div>
+    </section>
+
+    <section v-if="show('feedback')" class="mt-7">
+      <h2 class="mb-2 px-1 text-[13px] font-semibold uppercase tracking-wide text-ink-soft">
+        Feedback
+      </h2>
+      <div class="overflow-hidden rounded-2xl bg-surface ring-1 ring-line">
+        <label class="flex items-center gap-3 border-b border-line px-4 py-3">
+          <input
+            v-model="feedbackSound"
+            type="checkbox"
+            class="size-5 accent-[oklch(0.48_0.08_195)]"
+          />
+          <span class="text-sm font-medium text-ink">Sons ao registrar</span>
+        </label>
+        <label class="flex items-center gap-3 px-4 py-3">
+          <input
+            v-model="feedbackHaptic"
+            type="checkbox"
+            class="size-5 accent-[oklch(0.48_0.08_195)]"
+          />
+          <span class="text-sm font-medium text-ink">Vibração / toque nos botões</span>
+        </label>
+      </div>
+      <button
+        type="button"
+        class="mt-3 h-11 w-full rounded-2xl bg-teal text-sm font-semibold text-surface-raised"
+        @click="saveFeedback"
+      >
+        Salvar feedback
+      </button>
     </section>
 
     <section v-if="show('copos')" class="mt-7">
@@ -782,7 +838,6 @@ async function onImportFile(event: Event) {
         class="hidden"
         @change="onImportFile"
       />
-      <p v-if="backupMsg" class="mt-2 px-1 text-sm text-teal-deep">{{ backupMsg }}</p>
     </section>
 
     <section v-if="show('sobre')" class="mt-7">
@@ -802,5 +857,12 @@ async function onImportFile(event: Event) {
     message="Apaga sua conta, dados na nuvem e registros neste aparelho. Esta ação não pode ser desfeita."
     confirm-label="Excluir conta"
     @confirm="confirmDeleteAccount"
+  />
+  <ConfirmSheet
+    v-model:open="importConfirmOpen"
+    title="Importar backup?"
+    message="Isso substitui todos os dados locais (perfil, copos e lançamentos)."
+    confirm-label="Importar"
+    @confirm="confirmImport"
   />
 </template>

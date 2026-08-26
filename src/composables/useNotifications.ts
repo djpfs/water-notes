@@ -20,6 +20,25 @@ export type ReminderPayload = {
 }
 
 const PERIODIC_TAG = 'water-reminder'
+/** Chrome impõe ~12h como mínimo para Periodic Background Sync */
+const PERIODIC_MIN_MS = 12 * 60 * 60 * 1000
+
+function buildPayload(store: ReturnType<typeof useAppStore>): ReminderPayload {
+  const n = store.notifications
+  return {
+    type: 'SET_REMINDERS',
+    enabled: n.enabled,
+    intervalMinutes: n.intervalMinutes,
+    windowStartHour: n.windowStartHour,
+    windowStartMinute: n.windowStartMinute,
+    windowEndHour: n.windowEndHour,
+    windowEndMinute: n.windowEndMinute,
+    pauseWhenGoalReached: n.pauseWhenGoalReached,
+    nickname: store.profile.nickname || 'você',
+    remainingMl: store.remainingMl,
+    goalReached: store.goalReached,
+  }
+}
 
 async function postToSw(payload: object) {
   if (!('serviceWorker' in navigator)) return
@@ -27,7 +46,7 @@ async function postToSw(payload: object) {
   reg.active?.postMessage(payload)
 }
 
-async function registerPeriodicSync(enabled: boolean, intervalMinutes: number) {
+async function registerPeriodicSync(enabled: boolean) {
   if (!('serviceWorker' in navigator)) return
   const reg = await navigator.serviceWorker.ready
   const periodic = (
@@ -46,9 +65,7 @@ async function registerPeriodicSync(enabled: boolean, intervalMinutes: number) {
       await periodic.unregister?.(PERIODIC_TAG)
       return
     }
-    // Chrome exige minInterval alto; usamos o maior entre intervalo do user e 1h
-    const minInterval = Math.max(intervalMinutes, 60) * 60 * 1000
-    await periodic.register(PERIODIC_TAG, { minInterval })
+    await periodic.register(PERIODIC_TAG, { minInterval: PERIODIC_MIN_MS })
   } catch {
     /* Periodic Sync pode exigir permissão / instalado como PWA */
   }
@@ -56,21 +73,10 @@ async function registerPeriodicSync(enabled: boolean, intervalMinutes: number) {
 
 export async function syncReminders() {
   const store = useAppStore()
-  const n = store.notifications
-  await postToSw({
-    type: 'SET_REMINDERS',
-    enabled: n.enabled,
-    intervalMinutes: n.intervalMinutes,
-    windowStartHour: n.windowStartHour,
-    windowStartMinute: n.windowStartMinute,
-    windowEndHour: n.windowEndHour,
-    windowEndMinute: n.windowEndMinute,
-    pauseWhenGoalReached: n.pauseWhenGoalReached,
-    nickname: store.profile.nickname || 'você',
-    remainingMl: store.remainingMl,
-    goalReached: store.goalReached,
-  } satisfies ReminderPayload)
-  await registerPeriodicSync(n.enabled, n.intervalMinutes)
+  const payload = buildPayload(store)
+  await postToSw(payload)
+  await registerPeriodicSync(store.notifications.enabled)
+  return payload
 }
 
 export async function enableNotifications() {
@@ -116,16 +122,39 @@ export async function sendTestNotification() {
   await postToSw({ type: 'TEST_REMINDER' })
 }
 
+function onSwMessage(event: MessageEvent) {
+  if (event.data?.type !== 'REQUEST_REMINDER_REFRESH') return
+  const store = useAppStore()
+  const payload = buildPayload(store)
+  const port = event.ports?.[0]
+  port?.postMessage({
+    type: 'REMINDER_STATE',
+    enabled: payload.enabled,
+    intervalMinutes: payload.intervalMinutes,
+    windowStartHour: payload.windowStartHour,
+    windowStartMinute: payload.windowStartMinute,
+    windowEndHour: payload.windowEndHour,
+    windowEndMinute: payload.windowEndMinute,
+    pauseWhenGoalReached: payload.pauseWhenGoalReached,
+    nickname: payload.nickname,
+    remainingMl: payload.remainingMl,
+    goalReached: payload.goalReached,
+  })
+  void postToSw(payload)
+}
+
 export function useNotifications() {
   const store = useAppStore()
 
   onMounted(() => {
     void syncReminders()
     document.addEventListener('visibilitychange', onVisibility)
+    navigator.serviceWorker?.addEventListener('message', onSwMessage)
   })
 
   onUnmounted(() => {
     document.removeEventListener('visibilitychange', onVisibility)
+    navigator.serviceWorker?.removeEventListener('message', onSwMessage)
   })
 
   function onVisibility() {

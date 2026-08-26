@@ -39,6 +39,17 @@ export function formatDayLabel(key: string): string {
   })
 }
 
+/** Data completa em pt-BR (ex.: quarta-feira, 26 de agosto de 2026). */
+export function formatDateKey(key: string): string {
+  const label = parseDateKey(key).toLocaleDateString('pt-BR', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
+  return label.charAt(0).toUpperCase() + label.slice(1)
+}
+
 /** Legenda curta para gráfico (7 = dia da semana, 30 = dia do mês). */
 export function formatChartDayLabel(key: string, range: 7 | 30): string {
   const date = parseDateKey(key)

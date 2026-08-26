@@ -2,21 +2,22 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ProfileAvatar from '@/components/ProfileAvatar.vue'
+import ConfirmSheet from '@/components/ConfirmSheet.vue'
 import CupShortcutBar from '@/components/CupShortcutBar.vue'
 import DaySummaryModal from '@/components/DaySummaryModal.vue'
 import EditEntrySheet from '@/components/EditEntrySheet.vue'
 import EntryList from '@/components/EntryList.vue'
 import GoalCelebration from '@/components/GoalCelebration.vue'
 import QuickAddSheet from '@/components/QuickAddSheet.vue'
-import UndoToast from '@/components/UndoToast.vue'
 import UserProfileModal from '@/components/UserProfileModal.vue'
+import { useToast } from '@/composables/useToast'
 import WaterVessel from '@/components/WaterVessel.vue'
 import { usePwaUpdate } from '@/composables/usePwaUpdate'
 import { usePullToRefresh } from '@/composables/usePullToRefresh'
 import { useAppStore } from '@/stores/app'
 import type { Cup, DayStat, WaterEntry } from '@/types'
 import { formatVolume } from '@/utils/date'
-import { hapticLight, hapticSuccess, soundGoal, soundSip } from '@/utils/feedback'
+import { hapticSuccess, soundGoal, soundSip } from '@/utils/feedback'
 import { canShare, shareDailyProgress } from '@/utils/share'
 
 const router = useRouter()
@@ -27,11 +28,13 @@ const sheetOpen = ref(false)
 const celebrateOpen = ref(false)
 const editOpen = ref(false)
 const editing = ref<WaterEntry | null>(null)
-const toastMessage = ref('')
 const undoEntry = ref<WaterEntry | null>(null)
 const summaryOpen = ref(false)
 const profileOpen = ref(false)
-const yesterday = ref<DayStat | null>(null)
+const missedSummaries = ref<DayStat[]>([])
+const deleteConfirmOpen = ref(false)
+const pendingDeleteId = ref<string | null>(null)
+const { show: showToast } = useToast()
 const shareSupported = canShare()
 const { checkForUpdate, needRefresh } = usePwaUpdate()
 const themeLabel = computed(() => {
@@ -39,7 +42,6 @@ const themeLabel = computed(() => {
   if (store.theme === 'light') return 'Tema claro'
   return 'Tema do sistema'
 })
-let toastTimer: ReturnType<typeof setTimeout> | undefined
 let dayCheckTimer: ReturnType<typeof setInterval> | undefined
 
 const mainRef = ref<HTMLElement | null>(null)
@@ -75,7 +77,6 @@ watch(
 
 function register(ml: number) {
   store.addEntry(ml)
-  hapticLight()
   soundSip()
 }
 
@@ -92,18 +93,27 @@ function onSuggested() {
 }
 
 function onRemove(id: string) {
-  const removed = store.removeEntry(id)
-  if (!removed) return
-  undoEntry.value = removed
-  showToast('Lançamento removido')
+  pendingDeleteId.value = id
+  deleteConfirmOpen.value = true
 }
 
-function onUndo() {
-  if (undoEntry.value) {
-    store.restoreEntry(undoEntry.value)
-  }
-  toastMessage.value = ''
-  undoEntry.value = null
+function confirmRemove() {
+  if (!pendingDeleteId.value) return
+  const removed = store.removeEntry(pendingDeleteId.value)
+  pendingDeleteId.value = null
+  if (!removed) return
+  undoEntry.value = removed
+  showToast('Lançamento removido', {
+    action: {
+      label: 'Desfazer',
+      onClick: () => {
+        if (undoEntry.value) {
+          store.restoreEntry(undoEntry.value)
+          undoEntry.value = null
+        }
+      },
+    },
+  })
 }
 
 function onEdit(entry: WaterEntry) {
@@ -114,7 +124,6 @@ function onEdit(entry: WaterEntry) {
 function onSaveEdit(ml: number) {
   if (!editing.value) return
   store.updateEntry(editing.value.id, ml)
-  hapticLight()
 }
 
 function onCelebrateDone() {
@@ -122,9 +131,9 @@ function onCelebrateDone() {
 }
 
 function checkDayRollover() {
-  const summary = store.peekYesterdaySummary()
-  if (summary) {
-    yesterday.value = summary
+  const summaries = store.peekMissedSummaries()
+  if (summaries.length) {
+    missedSummaries.value = summaries
     summaryOpen.value = true
   } else {
     store.touchActiveDate()
@@ -134,15 +143,6 @@ function checkDayRollover() {
 function closeSummary() {
   summaryOpen.value = false
   store.acknowledgeDayRollover()
-}
-
-function showToast(message: string) {
-  toastMessage.value = message
-  if (toastTimer) clearTimeout(toastTimer)
-  toastTimer = setTimeout(() => {
-    toastMessage.value = ''
-    undoEntry.value = null
-  }, 5000)
 }
 
 async function onShare() {
@@ -183,7 +183,6 @@ watch(
 )
 
 onUnmounted(() => {
-  if (toastTimer) clearTimeout(toastTimer)
   if (dayCheckTimer) clearInterval(dayCheckTimer)
   document.removeEventListener('visibilitychange', onVisibility)
 })
@@ -451,7 +450,7 @@ function onVisibility() {
     />
     <DaySummaryModal
       v-model:open="summaryOpen"
-      :summary="yesterday"
+      :summaries="missedSummaries"
       :streak="store.streak"
       @continue="closeSummary"
     />
@@ -459,11 +458,12 @@ function onVisibility() {
       v-model:open="profileOpen"
       @settings="router.push({ name: 'settings' })"
     />
-    <UndoToast
-      :message="toastMessage"
-      :action-label="undoEntry ? 'Desfazer' : undefined"
-      @action="onUndo"
-      @close="toastMessage = ''"
+    <ConfirmSheet
+      v-model:open="deleteConfirmOpen"
+      title="Excluir lançamento?"
+      message="Este registro será removido do dia."
+      confirm-label="Excluir"
+      @confirm="confirmRemove"
     />
   </main>
 </template>

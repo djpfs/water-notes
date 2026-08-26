@@ -31,7 +31,6 @@ async function buildShareFile(store: ReturnType<typeof useAppStore>): Promise<Fi
     progress: store.progress,
     streak: store.streak,
     goalReached: store.goalReached,
-    entries: store.todayEntries.map((e) => ({ ml: e.ml, at: e.at })),
   })
 
   const date = new Date().toISOString().slice(0, 10)

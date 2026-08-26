@@ -64,7 +64,51 @@ function shouldNotify(): boolean {
   return true
 }
 
+function applyReminderPatch(data: Partial<ReminderConfig>) {
+  config = {
+    enabled: data.enabled ?? config.enabled,
+    intervalMinutes: Number(data.intervalMinutes) || config.intervalMinutes,
+    nickname: data.nickname || config.nickname,
+    remainingMl: Number(data.remainingMl ?? config.remainingMl),
+    goalReached: data.goalReached ?? config.goalReached,
+    windowStartHour: Number(data.windowStartHour ?? config.windowStartHour),
+    windowStartMinute: Number(data.windowStartMinute ?? config.windowStartMinute),
+    windowEndHour: Number(data.windowEndHour ?? config.windowEndHour),
+    windowEndMinute: Number(data.windowEndMinute ?? config.windowEndMinute),
+    pauseWhenGoalReached:
+      data.pauseWhenGoalReached ?? config.pauseWhenGoalReached,
+  }
+}
+
+async function refreshConfigFromClients(): Promise<void> {
+  const clients = await self.clients.matchAll({
+    type: 'window',
+    includeUncontrolled: true,
+  })
+  if (!clients.length) return
+
+  await Promise.race([
+    new Promise<void>((resolve) => {
+      const channel = new MessageChannel()
+      channel.port1.onmessage = (event: MessageEvent) => {
+        const data = event.data as Partial<ReminderConfig> & { type?: string }
+        if (data?.type === 'REMINDER_STATE') {
+          applyReminderPatch(data)
+        }
+        resolve()
+      }
+      for (const client of clients) {
+        client.postMessage({ type: 'REQUEST_REMINDER_REFRESH' }, [channel.port2])
+      }
+    }),
+    new Promise<void>((resolve) => {
+      setTimeout(resolve, 1500)
+    }),
+  ])
+}
+
 async function showReminder() {
+  await refreshConfigFromClients()
   if (!shouldNotify()) return
 
   const remaining =
@@ -127,18 +171,7 @@ self.addEventListener('message', (event: ExtendableMessageEvent) => {
 
   if (data?.type !== 'SET_REMINDERS') return
 
-  config = {
-    enabled: Boolean(data.enabled),
-    intervalMinutes: Number(data.intervalMinutes) || 60,
-    nickname: data.nickname || 'você',
-    remainingMl: Number(data.remainingMl) || 0,
-    goalReached: Boolean(data.goalReached),
-    windowStartHour: Number(data.windowStartHour) || 8,
-    windowStartMinute: Number(data.windowStartMinute) || 0,
-    windowEndHour: Number(data.windowEndHour) || 22,
-    windowEndMinute: Number(data.windowEndMinute) || 0,
-    pauseWhenGoalReached: data.pauseWhenGoalReached !== false,
-  }
+  applyReminderPatch(data)
 
   if (config.enabled) {
     scheduleNext()

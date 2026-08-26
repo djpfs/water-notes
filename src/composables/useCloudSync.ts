@@ -15,10 +15,12 @@ export type SyncData = Pick<
   | 'entries'
   | 'theme'
   | 'notifications'
+  | 'feedback'
   | 'celebratedDate'
   | 'installDismissedAt'
   | 'lastActiveDate'
   | 'lastSummaryDate'
+  | 'dailyGoalSnapshots'
 >
 
 let cachedUser: AuthUser | null | undefined
@@ -85,10 +87,12 @@ function snapshotFromStore(): SyncData {
     entries: store.entries.map((e) => ({ ...e })),
     theme: store.theme,
     notifications: { ...store.notifications },
+    feedback: { ...store.feedback },
     celebratedDate: store.celebratedDate,
     installDismissedAt: store.installDismissedAt,
     lastActiveDate: store.lastActiveDate,
     lastSummaryDate: store.lastSummaryDate,
+    dailyGoalSnapshots: { ...store.dailyGoalSnapshots },
   }
 }
 
@@ -104,6 +108,13 @@ function mergeCups(local: Cup[], remote: Cup[]): Cup[] {
   for (const c of remote) map.set(c.id, c)
   for (const c of local) map.set(c.id, c)
   return [...map.values()]
+}
+
+function mergeSnapshots(
+  local: Record<string, number>,
+  remote: Record<string, number>,
+): Record<string, number> {
+  return { ...remote, ...local }
 }
 
 export async function pullAndMerge(): Promise<'empty' | 'merged' | 'pulled'> {
@@ -135,6 +146,8 @@ export async function pullAndMerge(): Promise<'empty' | 'merged' | 'pulled'> {
   }
 
   const remoteProfile = remote.data.profile as Profile
+  const remoteSnapshots =
+    (remote.data.dailyGoalSnapshots as Record<string, number> | undefined) ?? {}
   const mergedEntries = mergeEntries(
     store.entries,
     remote.data.entries as WaterEntry[],
@@ -155,11 +168,16 @@ export async function pullAndMerge(): Promise<'empty' | 'merged' | 'pulled'> {
     entries: mergedEntries,
     theme: store.theme,
     notifications: store.notifications,
+    feedback: store.feedback,
     celebratedDate: store.celebratedDate || remote.data.celebratedDate,
     installDismissedAt:
       store.installDismissedAt || remote.data.installDismissedAt,
     lastActiveDate: store.lastActiveDate || remote.data.lastActiveDate,
     lastSummaryDate: store.lastSummaryDate || remote.data.lastSummaryDate,
+    dailyGoalSnapshots: mergeSnapshots(
+      store.dailyGoalSnapshots,
+      remoteSnapshots,
+    ),
   })
 
   await pushLocal()

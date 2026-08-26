@@ -39,6 +39,16 @@ export interface NotificationSettings {
   pauseWhenGoalReached: boolean
 }
 
+export interface FeedbackSettings {
+  sound: boolean
+  haptic: boolean
+}
+
+export const DEFAULT_FEEDBACK: FeedbackSettings = {
+  sound: true,
+  haptic: true,
+}
+
 export const DEFAULT_NOTIFICATIONS: NotificationSettings = {
   enabled: false,
   intervalMinutes: 60,
@@ -68,6 +78,9 @@ export interface AppBackup {
   installDismissedAt: string | null
   lastActiveDate: string | null
   lastSummaryDate: string | null
+  /** Meta diária congelada por dia (YYYY-MM-DD → ml) */
+  dailyGoalSnapshots: Record<string, number>
+  feedback: FeedbackSettings
 }
 
 export const ML_PER_KG = 35

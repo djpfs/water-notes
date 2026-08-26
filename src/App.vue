@@ -1,23 +1,37 @@
 <script setup lang="ts">
 import { RouterView } from 'vue-router'
 import InstallPromptSheet from '@/components/InstallPromptSheet.vue'
+import UndoToast from '@/components/UndoToast.vue'
 import UpdateBanner from '@/components/UpdateBanner.vue'
+import { useAutoSync } from '@/composables/useAutoSync'
 import { useNotifications } from '@/composables/useNotifications'
+import { useTapFeedback } from '@/composables/useTapFeedback'
 import { useTheme } from '@/composables/useTheme'
+import { useToast } from '@/composables/useToast'
 
 useTheme()
 useNotifications()
+useTapFeedback()
+useAutoSync()
+
+const { message, actionLabel, onAction, clear } = useToast()
 </script>
 
 <template>
   <div class="app-root mx-auto flex min-h-dvh w-full max-w-md flex-col">
-    <RouterView v-slot="{ Component }">
-      <Transition name="fade" mode="out-in">
-        <component :is="Component" />
+    <RouterView v-slot="{ Component, route }">
+      <Transition name="fade">
+        <component :is="Component" :key="route.path" />
       </Transition>
     </RouterView>
     <InstallPromptSheet />
     <UpdateBanner />
+    <UndoToast
+      :message="message"
+      :action-label="actionLabel"
+      @action="onAction"
+      @close="clear"
+    />
   </div>
 </template>
 
