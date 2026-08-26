@@ -29,6 +29,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/historico',
+      name: 'history',
+      component: () => import('@/views/HistoryView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/ajustes',
       name: 'settings',
       component: () => import('@/views/SettingsView.vue'),

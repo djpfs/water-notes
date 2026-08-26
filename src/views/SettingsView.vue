@@ -8,18 +8,26 @@ import {
   setNotificationInterval,
 } from '@/composables/useNotifications'
 import { useAppStore } from '@/stores/app'
-import { NOTIFICATION_INTERVALS, type ThemeMode } from '@/types'
+import { ML_PER_KG, NOTIFICATION_INTERVALS, type ThemeMode } from '@/types'
 import { formatVolume } from '@/utils/date'
 
 const router = useRouter()
 const store = useAppStore()
 
-
 const nickname = ref(store.profile.nickname)
 const weightKg = ref(String(store.profile.weightKg))
 const avatarId = ref(store.profile.avatarId)
+const useCustomGoal = ref(store.profile.goalOverrideMl != null)
+const customGoal = ref(
+  String(store.profile.goalOverrideMl ?? store.defaultGoalMl),
+)
+const bedtime = ref(
+  `${String(store.profile.bedtimeHour ?? 22).padStart(2, '0')}:${String(store.profile.bedtimeMinute ?? 0).padStart(2, '0')}`,
+)
 const notifError = ref('')
 const notifBusy = ref(false)
+const backupMsg = ref('')
+const fileInput = ref<HTMLInputElement | null>(null)
 
 const newLabel = ref('')
 const newMl = ref('250')
@@ -32,12 +40,23 @@ const weightNumber = computed(() => {
   return Number.isFinite(n) ? n : 0
 })
 
-const profileValid = computed(
-  () =>
-    nickname.value.trim().length >= 2 &&
-    weightNumber.value >= 20 &&
-    weightNumber.value <= 300,
+const suggestedGoal = computed(() =>
+  Math.round(Math.max(0, weightNumber.value) * ML_PER_KG),
 )
+
+const customGoalNumber = computed(() => {
+  const n = Number(String(customGoal.value).replace(',', '.'))
+  return Number.isFinite(n) ? n : 0
+})
+
+const profileValid = computed(() => {
+  if (nickname.value.trim().length < 2) return false
+  if (weightNumber.value < 20 || weightNumber.value > 300) return false
+  if (useCustomGoal.value) {
+    return customGoalNumber.value >= 500 && customGoalNumber.value <= 10000
+  }
+  return true
+})
 
 const themes: { id: ThemeMode; label: string }[] = [
   { id: 'system', label: 'Sistema' },
@@ -45,13 +64,24 @@ const themes: { id: ThemeMode; label: string }[] = [
   { id: 'dark', label: 'Escuro' },
 ]
 
+function parseBedtime(): { bedtimeHour: number; bedtimeMinute: number } {
+  const [h, m] = bedtime.value.split(':').map(Number)
+  return {
+    bedtimeHour: Number.isFinite(h) ? h : 22,
+    bedtimeMinute: Number.isFinite(m) ? m : 0,
+  }
+}
+
 function saveProfile() {
   if (!profileValid.value) return
   store.updateProfile({
     nickname: nickname.value,
     weightKg: weightNumber.value,
     avatarId: avatarId.value,
+    goalOverrideMl: useCustomGoal.value ? customGoalNumber.value : null,
+    ...parseBedtime(),
   })
+  backupMsg.value = 'Perfil salvo.'
 }
 
 function addCup() {
@@ -99,6 +129,44 @@ async function toggleNotifications() {
 async function onIntervalChange(event: Event) {
   const value = Number((event.target as HTMLSelectElement).value)
   await setNotificationInterval(value)
+}
+
+function exportBackup() {
+  const data = store.exportBackup()
+  const blob = new Blob([JSON.stringify(data, null, 2)], {
+    type: 'application/json',
+  })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `water-notes-backup-${new Date().toISOString().slice(0, 10)}.json`
+  a.click()
+  URL.revokeObjectURL(url)
+  backupMsg.value = 'Backup exportado.'
+}
+
+async function onImportFile(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  try {
+    const text = await file.text()
+    store.importBackup(JSON.parse(text))
+    nickname.value = store.profile.nickname
+    weightKg.value = String(store.profile.weightKg)
+    avatarId.value = store.profile.avatarId
+    useCustomGoal.value = store.profile.goalOverrideMl != null
+    customGoal.value = String(
+      store.profile.goalOverrideMl ?? store.defaultGoalMl,
+    )
+    bedtime.value = `${String(store.profile.bedtimeHour).padStart(2, '0')}:${String(store.profile.bedtimeMinute).padStart(2, '0')}`
+    backupMsg.value = 'Backup importado.'
+  } catch (err) {
+    backupMsg.value =
+      err instanceof Error ? err.message : 'Falha ao importar backup.'
+  } finally {
+    input.value = ''
+  }
 }
 </script>
 
@@ -148,11 +216,6 @@ async function onIntervalChange(event: Event) {
       <h2 class="text-sm font-semibold uppercase tracking-wide text-ink-soft">
         Lembretes
       </h2>
-      <p class="mt-1 text-sm text-ink-soft">
-        Notificações periódicas para lembrar de beber água. Funcionam melhor com o
-        app instalado.
-      </p>
-
       <button
         type="button"
         class="mt-3 h-12 w-full rounded-2xl font-semibold transition disabled:opacity-50"
@@ -166,7 +229,6 @@ async function onIntervalChange(event: Event) {
       >
         {{ store.notifications.enabled ? 'Lembretes ativos' : 'Ativar lembretes' }}
       </button>
-
       <label v-if="store.notifications.enabled" class="mt-3 block">
         <span class="mb-1.5 block text-sm text-ink-soft">Intervalo</span>
         <select
@@ -183,7 +245,6 @@ async function onIntervalChange(event: Event) {
           </option>
         </select>
       </label>
-
       <p v-if="notifError" class="mt-2 text-sm text-amber-deep">{{ notifError }}</p>
     </section>
 
@@ -214,7 +275,41 @@ async function onIntervalChange(event: Event) {
       </label>
 
       <p class="mt-2 text-xs text-ink-soft">
-        Meta atual: {{ formatVolume(Math.round(weightNumber * 35)) }}
+        Sugestão: {{ formatVolume(suggestedGoal) }} ({{ ML_PER_KG }} ml/kg)
+      </p>
+
+      <label class="mt-3 flex items-center gap-3 rounded-2xl bg-surface px-4 py-3 ring-1 ring-line">
+        <input
+          v-model="useCustomGoal"
+          type="checkbox"
+          class="size-5 accent-[oklch(0.48_0.08_195)]"
+        />
+        <span class="text-sm font-medium text-ink">Meta manual</span>
+      </label>
+
+      <label v-if="useCustomGoal" class="mt-3 block">
+        <span class="mb-1.5 block text-sm text-ink-soft">Meta (ml)</span>
+        <input
+          v-model="customGoal"
+          type="number"
+          inputmode="numeric"
+          min="500"
+          max="10000"
+          step="50"
+          class="h-12 w-full rounded-2xl bg-surface px-4 text-ink outline-none ring-1 ring-line focus:ring-2 focus:ring-teal"
+        />
+      </label>
+
+      <label class="mt-3 block">
+        <span class="mb-1.5 block text-sm text-ink-soft">Horário de dormir</span>
+        <input
+          v-model="bedtime"
+          type="time"
+          class="h-12 w-full rounded-2xl bg-surface px-4 text-ink outline-none ring-1 ring-line focus:ring-2 focus:ring-teal"
+        />
+      </label>
+      <p class="mt-1 text-xs text-ink-soft">
+        Usado para sugerir o próximo gole até esse horário.
       </p>
 
       <div class="mt-4">
@@ -233,9 +328,36 @@ async function onIntervalChange(event: Event) {
     </section>
 
     <section class="mt-10">
-      <h2 class="text-sm font-semibold uppercase tracking-wide text-ink-soft">Copos</h2>
-      <p class="mt-1 text-sm text-ink-soft">Atalhos para registrar consumo rápido.</p>
+      <h2 class="text-sm font-semibold uppercase tracking-wide text-ink-soft">Backup</h2>
+      <p class="mt-1 text-sm text-ink-soft">Exporte ou restaure seus dados em JSON.</p>
+      <div class="mt-3 flex gap-2">
+        <button
+          type="button"
+          class="h-12 flex-1 rounded-2xl bg-mist-deep font-semibold text-ink"
+          @click="exportBackup"
+        >
+          Exportar
+        </button>
+        <button
+          type="button"
+          class="h-12 flex-1 rounded-2xl bg-teal font-semibold text-surface-raised"
+          @click="fileInput?.click()"
+        >
+          Importar
+        </button>
+      </div>
+      <input
+        ref="fileInput"
+        type="file"
+        accept="application/json,.json"
+        class="hidden"
+        @change="onImportFile"
+      />
+      <p v-if="backupMsg" class="mt-2 text-sm text-teal-deep">{{ backupMsg }}</p>
+    </section>
 
+    <section class="mt-10">
+      <h2 class="text-sm font-semibold uppercase tracking-wide text-ink-soft">Copos</h2>
       <ul class="mt-4 space-y-2">
         <li
           v-for="cup in store.cups"

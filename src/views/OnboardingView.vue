@@ -3,6 +3,8 @@ import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import AvatarPicker from '@/components/AvatarPicker.vue'
 import { useAppStore } from '@/stores/app'
+import { ML_PER_KG } from '@/types'
+import { formatVolume } from '@/utils/date'
 
 const router = useRouter()
 const store = useAppStore()
@@ -11,48 +13,91 @@ const step = ref(0)
 const nickname = ref('')
 const weightKg = ref('70')
 const avatarId = ref('drop')
+const useCustomGoal = ref(false)
+const customGoal = ref('')
 
-const steps = ['Como te chamamos?', 'Qual seu peso?', 'Escolha um avatar']
+const steps = [
+  'Como te chamamos?',
+  'Qual seu peso?',
+  'Escolha um avatar',
+  'Sua meta diária',
+]
 
 const weightNumber = computed(() => {
   const n = Number(String(weightKg.value).replace(',', '.'))
   return Number.isFinite(n) ? n : 0
 })
 
+const suggestedGoal = computed(() =>
+  Math.round(Math.max(0, weightNumber.value) * ML_PER_KG),
+)
+
+const customGoalNumber = computed(() => {
+  const n = Number(String(customGoal.value).replace(',', '.'))
+  return Number.isFinite(n) ? n : 0
+})
+
 const canNext = computed(() => {
   if (step.value === 0) return nickname.value.trim().length >= 2
   if (step.value === 1) return weightNumber.value >= 20 && weightNumber.value <= 300
-  return Boolean(avatarId.value)
+  if (step.value === 2) return Boolean(avatarId.value)
+  if (step.value === 3) {
+    if (!useCustomGoal.value) return true
+    return customGoalNumber.value >= 500 && customGoalNumber.value <= 10000
+  }
+  return false
 })
 
-function next() {
-  if (!canNext.value) return
-  if (step.value < 2) {
-    step.value += 1
-    return
-  }
+function finish() {
   store.completeOnboarding({
     nickname: nickname.value,
     weightKg: weightNumber.value,
     avatarId: avatarId.value,
+    goalOverrideMl: useCustomGoal.value ? customGoalNumber.value : null,
   })
   router.push({ name: 'goal-reveal' })
+}
+
+function next() {
+  if (!canNext.value) return
+  if (step.value < 3) {
+    if (step.value === 1) {
+      customGoal.value = String(suggestedGoal.value)
+    }
+    step.value += 1
+    return
+  }
+  finish()
 }
 
 function back() {
   if (step.value > 0) step.value -= 1
 }
+
+function skip() {
+  store.skipOnboarding()
+  router.replace({ name: 'home' })
+}
 </script>
 
 <template>
   <main class="safe-pb safe-pt flex min-h-dvh flex-col px-5">
-    <header class="mb-8 pt-2">
-      <p class="text-xs font-semibold uppercase tracking-wider text-teal">
-        Passo {{ step + 1 }} de 3
-      </p>
+    <header class="mb-6 pt-2">
+      <div class="flex items-center justify-between">
+        <p class="text-xs font-semibold uppercase tracking-wider text-teal">
+          Passo {{ step + 1 }} de 4
+        </p>
+        <button
+          type="button"
+          class="text-sm font-semibold text-ink-soft"
+          @click="skip"
+        >
+          Pular
+        </button>
+      </div>
       <div class="mt-3 flex gap-1.5">
         <span
-          v-for="i in 3"
+          v-for="i in 4"
           :key="i"
           class="h-1.5 flex-1 rounded-full transition-colors duration-300"
           :class="i - 1 <= step ? 'bg-teal' : 'bg-line'"
@@ -97,12 +142,34 @@ function back() {
           </div>
         </label>
         <p class="mt-3 text-sm text-ink-soft">
-          Usamos 35 ml por kg para calcular sua meta diária.
+          Sugestão: {{ formatVolume(suggestedGoal) }} ({{ ML_PER_KG }} ml/kg).
         </p>
       </div>
 
-      <div v-else>
+      <div v-else-if="step === 2">
         <AvatarPicker v-model="avatarId" />
+      </div>
+
+      <div v-else>
+        <p class="text-sm text-ink-soft">
+          Calculado: <strong class="text-ink">{{ formatVolume(suggestedGoal) }}</strong>
+        </p>
+        <label class="mt-4 flex items-center gap-3 rounded-2xl bg-surface px-4 py-3 ring-1 ring-line">
+          <input v-model="useCustomGoal" type="checkbox" class="size-5 accent-[oklch(0.48_0.08_195)]" />
+          <span class="text-sm font-medium text-ink">Definir meta manual</span>
+        </label>
+        <label v-if="useCustomGoal" class="mt-3 block">
+          <span class="mb-2 block text-sm font-medium text-ink-soft">Meta em ml</span>
+          <input
+            v-model="customGoal"
+            type="number"
+            inputmode="numeric"
+            min="500"
+            max="10000"
+            step="50"
+            class="h-14 w-full rounded-2xl bg-surface px-4 font-display text-2xl font-bold text-ink outline-none ring-1 ring-line focus:ring-2 focus:ring-teal"
+          />
+        </label>
       </div>
     </div>
 
@@ -121,7 +188,7 @@ function back() {
         :disabled="!canNext"
         @click="next"
       >
-        {{ step === 2 ? 'Continuar' : 'Avançar' }}
+        {{ step === 3 ? 'Continuar' : 'Avançar' }}
       </button>
     </div>
   </main>

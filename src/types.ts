@@ -3,6 +3,10 @@ export interface Profile {
   weightKg: number
   avatarId: string
   onboarded: boolean
+  /** null = peso × 35 */
+  goalOverrideMl: number | null
+  bedtimeHour: number
+  bedtimeMinute: number
 }
 
 export interface Cup {
@@ -24,7 +28,29 @@ export interface NotificationSettings {
   intervalMinutes: number
 }
 
+export interface DayStat {
+  date: string
+  consumedMl: number
+  goalMl: number
+  reached: boolean
+}
+
+export interface AppBackup {
+  version: 1
+  exportedAt: string
+  profile: Profile
+  cups: Cup[]
+  entries: WaterEntry[]
+  theme: ThemeMode
+  notifications: NotificationSettings
+  celebratedDate: string | null
+  installDismissedAt: string | null
+  lastActiveDate: string | null
+  lastSummaryDate: string | null
+}
+
 export const ML_PER_KG = 35
+export const BACKUP_VERSION = 1 as const
 
 export const DEFAULT_CUPS: Cup[] = [
   { id: 'cup-150', label: 'Shot', ml: 150 },

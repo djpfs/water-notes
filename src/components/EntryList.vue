@@ -8,6 +8,7 @@ defineProps<{
 
 defineEmits<{
   remove: [id: string]
+  edit: [entry: WaterEntry]
 }>()
 </script>
 
@@ -17,23 +18,43 @@ defineEmits<{
       Hoje
     </h2>
 
-    <p v-if="entries.length === 0" class="mt-3 text-sm text-ink-soft">
-      Nenhum registro ainda. Toque em um copo ou adicione manualmente.
-    </p>
+    <div
+      v-if="entries.length === 0"
+      class="mt-3 rounded-3xl bg-surface px-5 py-8 text-center ring-1 ring-line"
+    >
+      <div
+        class="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-mist-deep"
+      >
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path
+            d="M12 3C12 3 5 11 5 16a7 7 0 0014 0c0-5-7-13-7-13z"
+            class="fill-teal"
+          />
+        </svg>
+      </div>
+      <p class="font-display text-lg font-bold text-ink">Comece com um gole</p>
+      <p class="mt-1 text-sm text-ink-soft">
+        Toque em um atalho de copo ou adicione um valor manual.
+      </p>
+    </div>
 
     <ul v-else class="mt-3 space-y-2">
       <li
         v-for="entry in entries"
         :key="entry.id"
-        class="flex items-center justify-between rounded-2xl bg-surface px-4 py-3 ring-1 ring-line"
+        class="flex items-center justify-between gap-2 rounded-2xl bg-surface px-3 py-3 ring-1 ring-line"
       >
-        <div>
-          <p class="font-semibold text-ink">{{ formatVolume(entry.ml) }}</p>
-          <p class="text-xs text-ink-soft">{{ formatTime(entry.at) }}</p>
-        </div>
         <button
           type="button"
-          class="h-10 rounded-xl px-3 text-sm font-medium text-ink-soft transition hover:bg-mist-deep hover:text-ink"
+          class="min-w-0 flex-1 rounded-xl px-1 text-left"
+          @click="$emit('edit', entry)"
+        >
+          <p class="font-semibold text-ink">{{ formatVolume(entry.ml) }}</p>
+          <p class="text-xs text-ink-soft">{{ formatTime(entry.at) }} · editar</p>
+        </button>
+        <button
+          type="button"
+          class="h-10 shrink-0 rounded-xl px-3 text-sm font-medium text-ink-soft transition hover:bg-mist-deep hover:text-ink"
           @click="$emit('remove', entry.id)"
         >
           Remover
