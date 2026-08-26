@@ -153,7 +153,7 @@ function back() {
           Calculado: <strong class="text-ink">{{ formatVolume(suggestedGoal) }}</strong>
         </p>
         <label class="mt-4 flex items-center gap-3 rounded-2xl bg-surface px-4 py-3 ring-1 ring-line">
-          <input v-model="useCustomGoal" type="checkbox" class="size-5 accent-[oklch(0.48_0.08_195)]" />
+          <input v-model="useCustomGoal" type="checkbox" class="size-5 accent-[oklch(0.48_0.10_238)]" />
           <span class="text-sm font-medium text-ink">Definir meta manual</span>
         </label>
         <label v-if="useCustomGoal" class="mt-3 block">

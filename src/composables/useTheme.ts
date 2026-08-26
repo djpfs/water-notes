@@ -16,7 +16,7 @@ function applyTheme(mode: ThemeMode) {
     const bar = getComputedStyle(document.documentElement)
       .getPropertyValue('--wn-status-bar')
       .trim()
-    meta.setAttribute('content', bar || (dark ? '#1e2529' : '#eef3f4'))
+    meta.setAttribute('content', bar || (dark ? '#1e2529' : '#eef2f8'))
   }
 }
 

@@ -186,6 +186,25 @@ self.addEventListener('periodicsync', (event) => {
   syncEvent.waitUntil(showReminder())
 })
 
+self.addEventListener('push', (event: PushEvent) => {
+  let payload: { title?: string; body?: string; url?: string } = {}
+  try {
+    payload = event.data?.json() as typeof payload
+  } catch {
+    payload = { body: event.data?.text() ?? '' }
+  }
+  event.waitUntil(
+    self.registration.showNotification(payload.title || 'Water Notes', {
+      body: payload.body || '',
+      icon: '/icons/icon-192.png',
+      badge: '/icons/icon-192.png',
+      tag: 'water-remote-push',
+      renotify: true,
+      data: { url: payload.url || '/inicio' },
+    }),
+  )
+})
+
 self.addEventListener('notificationclick', (event: NotificationEvent) => {
   event.notification.close()
   const target =

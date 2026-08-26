@@ -52,7 +52,7 @@ defineProps<{
       />
       <path
         d="M22 44c8-10 18-16 26-18"
-        stroke="oklch(0.9 0.03 195)"
+        stroke="oklch(0.9 0.03 238)"
         stroke-width="2"
         stroke-linecap="round"
         fill="none"
@@ -79,7 +79,7 @@ defineProps<{
       <circle cx="24" cy="30" r="2" class="fill-ink" />
       <path
         d="M18 32h8"
-        stroke="oklch(0.9 0.03 195)"
+        stroke="oklch(0.9 0.03 238)"
         stroke-width="1.5"
         stroke-linecap="round"
       />
@@ -98,7 +98,7 @@ defineProps<{
       />
       <path
         d="M26 38c2 4 6 6 10 4"
-        stroke="oklch(0.9 0.03 195)"
+        stroke="oklch(0.9 0.03 238)"
         stroke-width="2"
         stroke-linecap="round"
         fill="none"

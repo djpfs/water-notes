@@ -26,6 +26,15 @@ export interface WaterEntry {
 
 export type ThemeMode = 'system' | 'light' | 'dark'
 
+export type AppLocale = 'pt-BR' | 'en'
+
+export const DEFAULT_LOCALE: AppLocale = 'pt-BR'
+
+export const APP_LOCALES: { id: AppLocale; labelKey: string }[] = [
+  { id: 'pt-BR', labelKey: 'settings.languagePt' },
+  { id: 'en', labelKey: 'settings.languageEn' },
+]
+
 export interface NotificationSettings {
   enabled: boolean
   intervalMinutes: number
@@ -81,6 +90,7 @@ export interface AppBackup {
   /** Meta diária congelada por dia (YYYY-MM-DD → ml) */
   dailyGoalSnapshots: Record<string, number>
   feedback: FeedbackSettings
+  locale: AppLocale
 }
 
 export const ML_PER_KG = 35

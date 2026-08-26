@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import HistoryChart from '@/components/HistoryChart.vue'
 import { useAppStore } from '@/stores/app'
@@ -14,6 +15,7 @@ import { goBackOr } from '@/utils/navigation'
 
 const router = useRouter()
 const store = useAppStore()
+const { t } = useI18n()
 const range = ref<7 | 30>(7)
 const selectedDate = ref(localDateKey())
 
@@ -46,7 +48,7 @@ watch(todayKey, (today) => {
       <button
         type="button"
         class="flex h-11 w-11 items-center justify-center rounded-xl bg-mist-deep text-ink"
-        aria-label="Voltar"
+        :aria-label="t('common.back')"
         @click="goBackOr(router, { name: 'home' })"
       >
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -59,20 +61,20 @@ watch(todayKey, (today) => {
           />
         </svg>
       </button>
-      <h1 class="font-display text-2xl font-bold text-ink">Histórico</h1>
+      <h1 class="font-display text-2xl font-bold text-ink">{{ t('history.title') }}</h1>
     </header>
 
     <section v-if="isEmpty" class="mt-8 rounded-2xl bg-surface px-5 py-10 text-center ring-1 ring-line">
-      <p class="font-display text-lg font-bold text-ink">Sem registros ainda</p>
+      <p class="font-display text-lg font-bold text-ink">{{ t('history.emptyTitle') }}</p>
       <p class="mt-2 text-sm text-ink-soft">
-        Volte à tela inicial e registre seu primeiro gole — o histórico aparece aqui.
+        {{ t('history.emptyHint') }}
       </p>
       <button
         type="button"
         class="mt-5 h-11 rounded-2xl bg-teal px-6 text-sm font-semibold text-surface-raised"
         @click="router.push({ name: 'home' })"
       >
-        Registrar água
+        {{ t('history.registerWater') }}
       </button>
     </section>
 
@@ -80,21 +82,21 @@ watch(todayKey, (today) => {
       <section class="mt-5 grid grid-cols-2 gap-3">
         <div class="rounded-2xl bg-surface p-4 ring-1 ring-line">
           <p class="text-xs font-semibold uppercase tracking-wide text-ink-soft">
-            Sequência
+            {{ t('history.streak') }}
           </p>
           <p class="mt-1 font-display text-3xl font-bold text-teal-deep tabular-nums">
             {{ store.streak }}
           </p>
-          <p class="text-xs text-ink-soft">dias seguidos</p>
+          <p class="text-xs text-ink-soft">{{ t('history.streakDays') }}</p>
         </div>
         <div class="rounded-2xl bg-surface p-4 ring-1 ring-line">
           <p class="text-xs font-semibold uppercase tracking-wide text-ink-soft">
-            Metas no período
+            {{ t('history.goalsInPeriod') }}
           </p>
           <p class="mt-1 font-display text-3xl font-bold text-ink tabular-nums">
             {{ reachedCount }}/{{ range }}
           </p>
-          <p class="text-xs text-ink-soft">{{ formatVolume(totalConsumed) }} no total</p>
+          <p class="text-xs text-ink-soft">{{ t('history.total', { amount: formatVolume(totalConsumed) }) }}</p>
         </div>
       </section>
 
@@ -105,7 +107,7 @@ watch(todayKey, (today) => {
           :class="range === 7 ? 'bg-teal text-surface-raised' : 'bg-mist-deep text-ink-soft'"
           @click="range = 7"
         >
-          7 dias
+          {{ t('history.days7') }}
         </button>
         <button
           type="button"
@@ -113,7 +115,7 @@ watch(todayKey, (today) => {
           :class="range === 30 ? 'bg-teal text-surface-raised' : 'bg-mist-deep text-ink-soft'"
           @click="range = 30"
         >
-          30 dias
+          {{ t('history.days30') }}
         </button>
       </div>
 
@@ -123,11 +125,11 @@ watch(todayKey, (today) => {
 
       <section class="mt-6">
         <h2 class="mb-2 px-1 text-sm font-semibold uppercase tracking-wide text-ink-soft">
-          Detalhe do dia
+          {{ t('history.dayDetail') }}
         </h2>
         <label class="block overflow-hidden rounded-2xl bg-surface ring-1 ring-line">
           <span class="block border-b border-line px-4 py-2 text-xs text-ink-soft">
-            Escolha a data
+            {{ t('history.pickDate') }}
           </span>
           <input
             v-model="selectedDate"
@@ -158,7 +160,7 @@ watch(todayKey, (today) => {
                   : 'bg-mist-deep text-ink-soft'
               "
             >
-              {{ selectedStat.reached ? 'Meta OK' : 'Meta não atingida' }}
+              {{ selectedStat.reached ? t('history.goalOk') : t('history.goalMissed') }}
             </span>
           </div>
         </div>
@@ -180,7 +182,7 @@ watch(todayKey, (today) => {
           v-else
           class="mt-3 rounded-2xl bg-surface px-4 py-6 text-center text-sm text-ink-soft ring-1 ring-line"
         >
-          Nenhum registro neste dia.
+          {{ t('history.noEntriesDay') }}
         </p>
       </section>
     </template>

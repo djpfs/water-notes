@@ -18,8 +18,8 @@ const pctLabel = computed(() => Math.round(fillPercent.value))
       <svg viewBox="0 0 200 280" class="h-full w-full drop-shadow-sm" aria-hidden="true">
         <defs>
           <linearGradient id="waterGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="oklch(0.78 0.08 205)" />
-            <stop offset="100%" stop-color="oklch(0.52 0.1 210)" />
+            <stop offset="0%" stop-color="oklch(0.78 0.09 238)" />
+            <stop offset="100%" stop-color="oklch(0.52 0.11 235)" />
           </linearGradient>
           <clipPath id="vesselClip">
             <path
@@ -58,7 +58,7 @@ const pctLabel = computed(() => Math.round(fillPercent.value))
         <path
           d="M50 36h100c4 0 8 4 8 8v160c0 36-26 56-58 56s-58-20-58-56V44c0-4 4-8 8-8z"
           fill="none"
-          stroke="oklch(0.55 0.06 200 / 0.35)"
+          stroke="oklch(0.55 0.06 235 / 0.35)"
           stroke-width="2"
         />
       </svg>
@@ -89,11 +89,11 @@ const pctLabel = computed(() => Math.round(fillPercent.value))
 }
 
 .wave-a {
-  fill: oklch(0.82 0.07 200 / 0.5);
+  fill: oklch(0.82 0.08 235 / 0.5);
 }
 
 .wave-b {
-  fill: oklch(0.88 0.05 200 / 0.35);
+  fill: oklch(0.88 0.06 235 / 0.35);
 }
 
 .wave-scroll {

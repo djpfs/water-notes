@@ -15,16 +15,16 @@ const W = 1080
 const H = 1920
 
 const colors = {
-  bgA: '#b8e8ef',
-  bgB: '#e8f4f6',
+  bgA: '#b8d4ef',
+  bgB: '#e8f0f8',
   card: '#ffffff',
-  ink: '#1a3238',
-  inkSoft: '#5a7278',
-  teal: '#0d7377',
-  tealDeep: '#095558',
-  tealLight: '#5ec4c9',
-  water: '#6ec8d8',
-  line: '#dce8ea',
+  ink: '#1a2a38',
+  inkSoft: '#5a6478',
+  teal: '#1565b8',
+  tealDeep: '#0f4d8c',
+  tealLight: '#5ea8e8',
+  water: '#6ea8d8',
+  line: '#dce4ea',
 }
 
 function roundRect(
@@ -179,7 +179,7 @@ function drawStatPill(
   const px = cx - pillW / 2
 
   roundRect(ctx, px, y, pillW, pillH, 20)
-  ctx.fillStyle = '#f6fbfc'
+  ctx.fillStyle = '#f6f9fc'
   ctx.fill()
   ctx.strokeStyle = colors.line
   ctx.lineWidth = 2
@@ -215,7 +215,7 @@ export async function renderShareCard(input: ShareCardInput): Promise<Blob> {
   const cardW = W - 128
   const cardH = H - 280
 
-  ctx.shadowColor = 'rgba(13, 115, 119, 0.18)'
+  ctx.shadowColor = 'rgba(21, 101, 184, 0.18)'
   ctx.shadowBlur = 48
   ctx.shadowOffsetY = 16
   roundRect(ctx, cardX, cardY, cardW, cardH, 48)
@@ -246,7 +246,7 @@ export async function renderShareCard(input: ShareCardInput): Promise<Blob> {
     const bx = cardX + cardW - tw - pad
     const by = cardY + pad + 8
     roundRect(ctx, bx, by, tw, 52, 26)
-    ctx.fillStyle = '#e6f7f8'
+    ctx.fillStyle = '#e6f0fa'
     ctx.fill()
     ctx.fillStyle = colors.tealDeep
     ctx.textAlign = 'center'

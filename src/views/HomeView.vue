@@ -12,6 +12,8 @@ import QuickAddSheet from '@/components/QuickAddSheet.vue'
 import UserProfileModal from '@/components/UserProfileModal.vue'
 import { useToast } from '@/composables/useToast'
 import WaterVessel from '@/components/WaterVessel.vue'
+import { fetchMe, pullAndMerge } from '@/composables/useCloudSync'
+import { i18n } from '@/i18n'
 import { usePwaUpdate } from '@/composables/usePwaUpdate'
 import { usePullToRefresh } from '@/composables/usePullToRefresh'
 import { useAppStore } from '@/stores/app'
@@ -47,19 +49,36 @@ let dayCheckTimer: ReturnType<typeof setInterval> | undefined
 const mainRef = ref<HTMLElement | null>(null)
 const { pullDistance, refreshing, threshold, bind } = usePullToRefresh(
   async () => {
-    const hasUpdate = await checkForUpdate()
-    if (hasUpdate || needRefresh.value) {
-      showToast('Nova versão disponível')
-    } else {
-      showToast('App atualizado')
-    }
+    const [hasUpdate, syncResult] = await Promise.all([
+      checkForUpdate().catch(() => false),
+      (async () => {
+        const user = await fetchMe()
+        if (!user) return null
+        try {
+          return await pullAndMerge()
+        } catch {
+          return 'error' as const
+        }
+      })(),
+    ])
+
+    const appNeedsUpdate = hasUpdate || needRefresh.value
+    const parts: string[] = []
+
+    if (appNeedsUpdate) parts.push(i18n.global.t('toast.appUpdate'))
+    if (syncResult === 'pulled') parts.push(i18n.global.t('toast.dataRestored'))
+    else if (syncResult === 'merged') parts.push(i18n.global.t('toast.dataSynced'))
+    else if (syncResult === 'empty') parts.push(i18n.global.t('toast.dataUploaded'))
+    else if (syncResult === 'error') parts.push(i18n.global.t('toast.syncFailed'))
+
+    showToast(parts.length ? parts.join(' · ') : i18n.global.t('toast.allUpdated'))
   },
 )
 
 const pullHint = computed(() => {
-  if (refreshing.value) return 'Verificando atualizações…'
-  if (pullDistance.value >= threshold) return 'Solte para atualizar'
-  return 'Puxe para atualizar'
+  if (refreshing.value) return i18n.global.t('home.pullUpdating')
+  if (pullDistance.value >= threshold) return i18n.global.t('home.pullRelease')
+  return i18n.global.t('home.pullRefresh')
 })
 
 watch(

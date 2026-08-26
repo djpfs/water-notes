@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import AvatarPicker from '@/components/AvatarPicker.vue'
 import ConfirmSheet from '@/components/ConfirmSheet.vue'
@@ -20,17 +21,23 @@ import {
   setNotificationInterval,
   updateNotificationSettings,
 } from '@/composables/useNotifications'
+import { canUseRemotePush, testRemotePush } from '@/composables/useRemotePush'
 import { useToast } from '@/composables/useToast'
 import { useAppStore } from '@/stores/app'
-import { ML_PER_KG, NOTIFICATION_INTERVALS, type ThemeMode } from '@/types'
+import { ML_PER_KG, NOTIFICATION_INTERVALS, APP_LOCALES, type AppLocale, type ThemeMode } from '@/types'
 import { formatVolume } from '@/utils/date'
+import { detectHealthPlatform, exportHealthData } from '@/utils/healthExport'
 import { goBackOr } from '@/utils/navigation'
 import { formatClock, parseClock } from '@/utils/timeWindow'
 import { APP_VERSION } from '@/version'
 
 const router = useRouter()
 const store = useAppStore()
+const { t } = useI18n()
 const { show: showToast } = useToast()
+const healthPlatform = detectHealthPlatform()
+const locale = ref<AppLocale>(store.locale)
+const remotePushOk = ref(canUseRemotePush())
 
 const search = ref('')
 const cloudUser = ref<AuthUser | null>(null)
@@ -105,35 +112,31 @@ const metaValid = computed(() => {
   return customGoalNumber.value >= 500 && customGoalNumber.value <= 10000
 })
 
-const themes: { id: ThemeMode; label: string }[] = [
-  { id: 'system', label: 'Sistema' },
-  { id: 'light', label: 'Claro' },
-  { id: 'dark', label: 'Escuro' },
-]
+const themes = computed(() => [
+  { id: 'system' as ThemeMode, label: t('settings.themeSystem') },
+  { id: 'light' as ThemeMode, label: t('settings.themeLight') },
+  { id: 'dark' as ThemeMode, label: t('settings.themeDark') },
+])
 
-type Section = {
-  id: string
-  title: string
-  keywords: string
-}
-
-const sections: Section[] = [
-  { id: 'conta', title: 'Conta', keywords: 'conta login google sync sincronizar sair excluir apagar delete' },
-  { id: 'perfil', title: 'Perfil', keywords: 'perfil apelido peso avatar foto' },
-  { id: 'meta', title: 'Meta', keywords: 'meta ml peso objetivo dormir horário' },
-  { id: 'lembretes', title: 'Lembretes', keywords: 'lembretes notificação intervalo janela pausar' },
-  { id: 'aparencia', title: 'Aparência', keywords: 'aparência tema claro escuro sistema feedback som haptic' },
-  { id: 'feedback', title: 'Feedback', keywords: 'feedback som haptic vibração toque' },
-  { id: 'copos', title: 'Copos', keywords: 'copos atalhos volume garrafa caneca' },
-  { id: 'dados', title: 'Dados', keywords: 'dados backup exportar importar' },
-  { id: 'sobre', title: 'Sobre', keywords: 'sobre versão app' },
-]
+const sections = computed(() => [
+  { id: 'conta', title: t('settings.account'), keywords: 'conta login google sync account' },
+  { id: 'perfil', title: t('settings.profile'), keywords: 'perfil profile nickname peso weight avatar' },
+  { id: 'meta', title: t('settings.goal'), keywords: 'meta goal ml peso weight bedtime' },
+  { id: 'lembretes', title: t('settings.reminders'), keywords: 'lembretes reminders push notificação notification vapid' },
+  { id: 'aparencia', title: t('settings.appearance'), keywords: 'aparência appearance tema theme' },
+  { id: 'feedback', title: t('settings.feedback'), keywords: 'feedback som sound haptic vibração' },
+  { id: 'idioma', title: t('settings.language'), keywords: 'idioma language english português locale' },
+  { id: 'copos', title: t('settings.cups'), keywords: 'copos cups atalhos shortcuts' },
+  { id: 'dados', title: t('settings.data'), keywords: 'dados data backup export import' },
+  { id: 'saude', title: t('settings.health'), keywords: 'saúde health apple health connect csv json' },
+  { id: 'sobre', title: t('settings.about'), keywords: 'sobre about versão version' },
+])
 
 const visible = computed(() => {
   const q = search.value.trim().toLowerCase()
-  if (!q) return new Set(sections.map((s) => s.id))
+  if (!q) return new Set(sections.value.map((s) => s.id))
   return new Set(
-    sections
+    sections.value
       .filter(
         (s) =>
           s.title.toLowerCase().includes(q) ||
@@ -163,7 +166,7 @@ function saveProfileFields() {
     avatarId: avatarId.value,
     useProfilePhoto: useProfilePhoto.value,
   })
-  showToast('Perfil salvo.')
+  showToast(t('settings.profileSaved'))
 }
 
 function saveMeta() {
@@ -172,7 +175,7 @@ function saveMeta() {
     goalOverrideMl: useCustomGoal.value ? customGoalNumber.value : null,
     ...parseBedtime(),
   })
-  showToast('Meta salva.')
+  showToast(t('settings.goalSaved'))
 }
 
 function saveFeedback() {
@@ -180,7 +183,34 @@ function saveFeedback() {
     sound: feedbackSound.value,
     haptic: feedbackHaptic.value,
   })
-  showToast('Feedback salvo.')
+  showToast(t('settings.feedbackSaved'))
+}
+
+function saveLocale() {
+  store.setLocale(locale.value)
+  showToast(t('settings.languageSaved'))
+}
+
+function exportHealth(format: 'csv' | 'json') {
+  exportHealthData(store.entries, format)
+  showToast(t('settings.healthExported'))
+}
+
+async function onTestRemotePush() {
+  if (!cloudUser.value) {
+    notifError.value = t('settings.loginHint')
+    return
+  }
+  notifError.value = ''
+  notifBusy.value = true
+  try {
+    await testRemotePush()
+    showToast(t('settings.testSent'))
+  } catch (err) {
+    notifError.value = err instanceof Error ? err.message : t('notifications.pushSubscribeFailed')
+  } finally {
+    notifBusy.value = false
+  }
 }
 
 function openAddCup() {
@@ -321,7 +351,7 @@ async function saveReminderWindow() {
     windowEndMinute: end.minute,
     pauseWhenGoalReached: pauseWhenGoalReached.value,
   })
-  showToast('Lembretes atualizados.')
+  showToast(t('settings.remindersSaved'))
 }
 
 async function onTestNotification() {
@@ -329,7 +359,7 @@ async function onTestNotification() {
   notifBusy.value = true
   try {
     await sendTestNotification()
-    showToast('Notificação de teste enviada.')
+    showToast(t('settings.testSent'))
   } catch (err) {
     notifError.value =
       err instanceof Error ? err.message : 'Falha ao testar notificação.'
@@ -349,7 +379,7 @@ function exportBackup() {
   a.download = `water-notes-backup-${new Date().toISOString().slice(0, 10)}.json`
   a.click()
   URL.revokeObjectURL(url)
-  showToast('Backup exportado.')
+  showToast(t('settings.backupExported'))
 }
 
 function applyImport(data: unknown) {
@@ -365,7 +395,8 @@ function applyImport(data: unknown) {
   bedtime.value = `${String(store.profile.bedtimeHour).padStart(2, '0')}:${String(store.profile.bedtimeMinute).padStart(2, '0')}`
   feedbackSound.value = store.feedback.sound
   feedbackHaptic.value = store.feedback.haptic
-  showToast('Backup importado.')
+  locale.value = store.locale
+  showToast(t('settings.backupImported'))
 }
 
 function confirmImport() {
@@ -561,7 +592,7 @@ async function onImportFile(event: Event) {
           <input
             v-model="useCustomGoal"
             type="checkbox"
-            class="size-5 accent-[oklch(0.48_0.08_195)]"
+            class="size-5 accent-[oklch(0.48_0.10_238)]"
           />
           <span class="text-sm font-medium text-ink">Meta manual</span>
         </label>
@@ -660,7 +691,7 @@ async function onImportFile(event: Event) {
             <input
               v-model="pauseWhenGoalReached"
               type="checkbox"
-              class="size-5 accent-[oklch(0.48_0.08_195)]"
+              class="size-5 accent-[oklch(0.48_0.10_238)]"
             />
             <span class="text-sm font-medium text-ink">Pausar se a meta já foi batida</span>
           </label>
@@ -678,12 +709,22 @@ async function onImportFile(event: Event) {
           :disabled="notifBusy"
           @click="onTestNotification"
         >
-          Testar notificação
+          {{ t('settings.testNotification') }}
+        </button>
+        <button
+          type="button"
+          class="flex h-12 w-full items-center border-t border-line px-4 text-left text-sm font-medium text-teal disabled:opacity-50"
+          :disabled="notifBusy || !remotePushOk"
+          @click="onTestRemotePush"
+        >
+          {{ t('settings.pushRemoteTest') }}
         </button>
       </div>
       <p class="mt-2 px-1 text-xs text-ink-soft">
-        Com o app fechado, o Chrome pode levar até ~12 horas para disparar lembretes em segundo plano.
-        Com o app aberto, o intervalo escolhido vale normalmente.
+        {{ t('settings.pushRemoteHint') }}
+      </p>
+      <p class="mt-1 px-1 text-xs text-ink-soft">
+        {{ t('settings.periodicHint') }}
       </p>
       <p v-if="notifError" class="mt-2 px-1 text-sm text-amber-deep">{{ notifError }}</p>
     </section>
@@ -719,7 +760,7 @@ async function onImportFile(event: Event) {
           <input
             v-model="feedbackSound"
             type="checkbox"
-            class="size-5 accent-[oklch(0.48_0.08_195)]"
+            class="size-5 accent-[oklch(0.48_0.10_238)]"
           />
           <span class="text-sm font-medium text-ink">Sons ao registrar</span>
         </label>
@@ -727,7 +768,7 @@ async function onImportFile(event: Event) {
           <input
             v-model="feedbackHaptic"
             type="checkbox"
-            class="size-5 accent-[oklch(0.48_0.08_195)]"
+            class="size-5 accent-[oklch(0.48_0.10_238)]"
           />
           <span class="text-sm font-medium text-ink">Vibração / toque nos botões</span>
         </label>
@@ -739,6 +780,60 @@ async function onImportFile(event: Event) {
       >
         Salvar feedback
       </button>
+    </section>
+
+    <section v-if="show('idioma')" class="mt-7">
+      <h2 class="mb-2 px-1 text-[13px] font-semibold uppercase tracking-wide text-ink-soft">
+        {{ t('settings.language') }}
+      </h2>
+      <div class="overflow-hidden rounded-2xl bg-surface ring-1 ring-line">
+        <label class="block px-4 py-3">
+          <span class="mb-1.5 block text-xs text-ink-soft">{{ t('settings.languageLabel') }}</span>
+          <select v-model="locale" class="w-full bg-transparent text-ink outline-none">
+            <option v-for="item in APP_LOCALES" :key="item.id" :value="item.id">
+              {{ t(item.labelKey) }}
+            </option>
+          </select>
+        </label>
+      </div>
+      <button
+        type="button"
+        class="mt-3 h-11 w-full rounded-2xl bg-teal text-sm font-semibold text-surface-raised"
+        @click="saveLocale"
+      >
+        {{ t('common.save') }}
+      </button>
+    </section>
+
+    <section v-if="show('saude')" class="mt-7">
+      <h2 class="mb-2 px-1 text-[13px] font-semibold uppercase tracking-wide text-ink-soft">
+        {{ t('settings.health') }}
+      </h2>
+      <div class="overflow-hidden rounded-2xl bg-surface ring-1 ring-line">
+        <p class="border-b border-line px-4 py-3 text-sm text-ink-soft">
+          {{ t('settings.healthHint') }}
+        </p>
+        <p v-if="healthPlatform === 'ios'" class="border-b border-line px-4 py-3 text-sm text-ink-soft">
+          {{ t('settings.healthApple') }}
+        </p>
+        <p v-else-if="healthPlatform === 'android'" class="border-b border-line px-4 py-3 text-sm text-ink-soft">
+          {{ t('settings.healthAndroid') }}
+        </p>
+        <button
+          type="button"
+          class="flex h-12 w-full items-center border-b border-line px-4 text-left text-sm font-medium text-ink"
+          @click="exportHealth('csv')"
+        >
+          {{ t('settings.exportHealthCsv') }}
+        </button>
+        <button
+          type="button"
+          class="flex h-12 w-full items-center px-4 text-left text-sm font-medium text-ink"
+          @click="exportHealth('json')"
+        >
+          {{ t('settings.exportHealthJson') }}
+        </button>
+      </div>
     </section>
 
     <section v-if="show('copos')" class="mt-7">

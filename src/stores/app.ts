@@ -6,6 +6,7 @@ import {
   DEFAULT_FEEDBACK,
   DEFAULT_NOTIFICATIONS,
   type AppBackup,
+  type AppLocale,
   type Cup,
   type DayStat,
   type FeedbackSettings,
@@ -13,7 +14,9 @@ import {
   type Profile,
   type ThemeMode,
   type WaterEntry,
+  DEFAULT_LOCALE,
 } from '@/types'
+import { detectLocale, setI18nLocale } from '@/i18n'
 import { addDays, hoursUntilBedtime, localDateKey, snapMl } from '@/utils/date'
 import { createId } from '@/utils/id'
 import {
@@ -87,6 +90,7 @@ export const useAppStore = defineStore(
     const theme = ref<ThemeMode>('system')
     const notifications = ref<NotificationSettings>({ ...DEFAULT_NOTIFICATIONS })
     const feedback = ref<FeedbackSettings>({ ...DEFAULT_FEEDBACK })
+    const locale = ref<AppLocale>(detectLocale())
     const installDismissedAt = ref<string | null>(null)
     const lastActiveDate = ref<string | null>(null)
     const lastSummaryDate = ref<string | null>(null)
@@ -323,6 +327,11 @@ export const useAppStore = defineStore(
       })
     }
 
+    function setLocale(next: AppLocale) {
+      locale.value = next
+      setI18nLocale(next)
+    }
+
     function setFeedback(partial: Partial<FeedbackSettings>) {
       feedback.value = normalizeFeedback({
         ...feedback.value,
@@ -379,6 +388,7 @@ export const useAppStore = defineStore(
         theme: theme.value,
         notifications: { ...notifications.value },
         feedback: { ...feedback.value },
+        locale: locale.value,
         celebratedDate: celebratedDate.value,
         installDismissedAt: installDismissedAt.value,
         lastActiveDate: lastActiveDate.value,
@@ -404,6 +414,8 @@ export const useAppStore = defineStore(
       theme.value = raw.theme ?? 'system'
       notifications.value = normalizeNotifications(raw.notifications)
       feedback.value = normalizeFeedback(raw.feedback)
+      locale.value = raw.locale === 'en' ? 'en' : DEFAULT_LOCALE
+      setI18nLocale(locale.value)
       celebratedDate.value = raw.celebratedDate ?? null
       installDismissedAt.value = raw.installDismissedAt ?? null
       lastActiveDate.value = raw.lastActiveDate ?? localDateKey()
@@ -421,6 +433,8 @@ export const useAppStore = defineStore(
       theme.value = 'system'
       notifications.value = { ...DEFAULT_NOTIFICATIONS }
       feedback.value = { ...DEFAULT_FEEDBACK }
+      locale.value = DEFAULT_LOCALE
+      setI18nLocale(DEFAULT_LOCALE)
       installDismissedAt.value = null
       lastActiveDate.value = null
       lastSummaryDate.value = null
@@ -435,6 +449,7 @@ export const useAppStore = defineStore(
       theme,
       notifications,
       feedback,
+      locale,
       installDismissedAt,
       lastActiveDate,
       lastSummaryDate,
@@ -468,6 +483,7 @@ export const useAppStore = defineStore(
       applyGoogleAccount,
       setNotifications,
       setFeedback,
+      setLocale,
       dismissInstall,
       clearInstallDismiss,
       peekMissedSummaries,
@@ -489,6 +505,7 @@ export const useAppStore = defineStore(
         'theme',
         'notifications',
         'feedback',
+        'locale',
         'installDismissedAt',
         'lastActiveDate',
         'lastSummaryDate',
@@ -499,6 +516,7 @@ export const useAppStore = defineStore(
           profile: Profile
           notifications: NotificationSettings
           feedback: FeedbackSettings
+          locale: AppLocale
           dailyGoalSnapshots: Record<string, number>
           entries: WaterEntry[]
         }
@@ -508,6 +526,8 @@ export const useAppStore = defineStore(
           normalizeNotifications(store.notifications),
         )
         Object.assign(store.feedback, normalizeFeedback(store.feedback))
+        store.locale = store.locale === 'en' ? 'en' : DEFAULT_LOCALE
+        setI18nLocale(store.locale)
         store.dailyGoalSnapshots = store.dailyGoalSnapshots ?? {}
         const today = localDateKey()
         if (!store.dailyGoalSnapshots[today]) {

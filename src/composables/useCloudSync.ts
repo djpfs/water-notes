@@ -21,6 +21,7 @@ export type SyncData = Pick<
   | 'lastActiveDate'
   | 'lastSummaryDate'
   | 'dailyGoalSnapshots'
+  | 'locale'
 >
 
 let cachedUser: AuthUser | null | undefined
@@ -93,6 +94,7 @@ function snapshotFromStore(): SyncData {
     lastActiveDate: store.lastActiveDate,
     lastSummaryDate: store.lastSummaryDate,
     dailyGoalSnapshots: { ...store.dailyGoalSnapshots },
+    locale: store.locale,
   }
 }
 
@@ -169,6 +171,7 @@ export async function pullAndMerge(): Promise<'empty' | 'merged' | 'pulled'> {
     theme: store.theme,
     notifications: store.notifications,
     feedback: store.feedback,
+    locale: store.locale,
     celebratedDate: store.celebratedDate || remote.data.celebratedDate,
     installDismissedAt:
       store.installDismissedAt || remote.data.installDismissedAt,

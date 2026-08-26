@@ -45,6 +45,7 @@ export async function destroySession(db: D1Database, request: Request) {
 }
 
 export async function deleteUserAccount(db: D1Database, userId: string) {
+  await db.prepare(`DELETE FROM push_subscriptions WHERE user_id = ?`).bind(userId).run()
   await db.prepare(`DELETE FROM user_data WHERE user_id = ?`).bind(userId).run()
   await db.prepare(`DELETE FROM sessions WHERE user_id = ?`).bind(userId).run()
   await db.prepare(`DELETE FROM users WHERE id = ?`).bind(userId).run()

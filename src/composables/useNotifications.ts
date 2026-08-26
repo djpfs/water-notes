@@ -1,4 +1,10 @@
+import { i18n } from '@/i18n'
 import { onMounted, onUnmounted, watch } from 'vue'
+import { fetchMe } from '@/composables/useCloudSync'
+import {
+  subscribeRemotePush,
+  unsubscribeRemotePush,
+} from '@/composables/useRemotePush'
 import { useAppStore } from '@/stores/app'
 import type { NotificationSettings } from '@/types'
 
@@ -20,7 +26,6 @@ export type ReminderPayload = {
 }
 
 const PERIODIC_TAG = 'water-reminder'
-/** Chrome impõe ~12h como mínimo para Periodic Background Sync */
 const PERIODIC_MIN_MS = 12 * 60 * 60 * 1000
 
 function buildPayload(store: ReturnType<typeof useAppStore>): ReminderPayload {
@@ -71,22 +76,33 @@ async function registerPeriodicSync(enabled: boolean) {
   }
 }
 
+async function syncRemotePush(enabled: boolean) {
+  const user = await fetchMe()
+  if (!user) return
+  if (enabled) {
+    await subscribeRemotePush().catch(() => {})
+  } else {
+    await unsubscribeRemotePush().catch(() => {})
+  }
+}
+
 export async function syncReminders() {
   const store = useAppStore()
   const payload = buildPayload(store)
   await postToSw(payload)
   await registerPeriodicSync(store.notifications.enabled)
+  await syncRemotePush(store.notifications.enabled)
   return payload
 }
 
 export async function enableNotifications() {
   if (!('Notification' in window)) {
-    throw new Error('Este navegador não suporta notificações.')
+    throw new Error(i18n.global.t('notifications.unsupported'))
   }
   const permission = await Notification.requestPermission()
   if (permission !== 'granted') {
     useAppStore().setNotifications({ enabled: false })
-    throw new Error('Permissão de notificação negada.')
+    throw new Error(i18n.global.t('notifications.denied'))
   }
   useAppStore().setNotifications({ enabled: true })
   await syncReminders()
@@ -111,12 +127,12 @@ export async function updateNotificationSettings(
 
 export async function sendTestNotification() {
   if (!('Notification' in window)) {
-    throw new Error('Este navegador não suporta notificações.')
+    throw new Error(i18n.global.t('notifications.unsupported'))
   }
   if (Notification.permission !== 'granted') {
     const permission = await Notification.requestPermission()
     if (permission !== 'granted') {
-      throw new Error('Permissão de notificação negada.')
+      throw new Error(i18n.global.t('notifications.denied'))
     }
   }
   await postToSw({ type: 'TEST_REMINDER' })

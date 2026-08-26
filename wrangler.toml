@@ -9,6 +9,9 @@ database_name = "water-notes"
 database_id = "8d3461ad-5d85-48cc-b655-6f86044be0fa"
 migrations_dir = "migrations"
 
+[triggers]
+crons = ["0 * * * *"]
+
 [assets]
 directory = "./dist"
 binding = "ASSETS"

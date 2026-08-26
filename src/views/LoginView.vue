@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import {
   fetchMe,
@@ -11,6 +12,7 @@ import { useAppStore } from '@/stores/app'
 const router = useRouter()
 const route = useRoute()
 const store = useAppStore()
+const { t } = useI18n()
 
 const busy = ref(true)
 const error = ref('')
@@ -47,7 +49,7 @@ async function finishAuthFlow() {
 onMounted(async () => {
   const auth = route.query.auth
   if (auth === 'error') {
-    error.value = 'Não foi possível entrar. Tente de novo.'
+    error.value = t('login.error')
     busy.value = false
     await router.replace({ name: 'login' })
     return
