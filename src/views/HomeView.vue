@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import AvatarIcon from '@/components/AvatarIcon.vue'
 import CupShortcutBar from '@/components/CupShortcutBar.vue'
 import DaySummaryModal from '@/components/DaySummaryModal.vue'
@@ -14,8 +14,10 @@ import { useAppStore } from '@/stores/app'
 import type { Cup, DayStat, WaterEntry } from '@/types'
 import { formatVolume } from '@/utils/date'
 import { hapticLight, hapticSuccess, soundGoal, soundSip } from '@/utils/feedback'
+import { canShare, shareDailyProgress } from '@/utils/share'
 
 const router = useRouter()
+const route = useRoute()
 const store = useAppStore()
 
 const sheetOpen = ref(false)
@@ -26,6 +28,7 @@ const toastMessage = ref('')
 const undoEntry = ref<WaterEntry | null>(null)
 const summaryOpen = ref(false)
 const yesterday = ref<DayStat | null>(null)
+const shareSupported = canShare()
 let toastTimer: ReturnType<typeof setTimeout> | undefined
 let dayCheckTimer: ReturnType<typeof setInterval> | undefined
 
@@ -64,12 +67,7 @@ function onRemove(id: string) {
   const removed = store.removeEntry(id)
   if (!removed) return
   undoEntry.value = removed
-  toastMessage.value = 'Lançamento removido'
-  if (toastTimer) clearTimeout(toastTimer)
-  toastTimer = setTimeout(() => {
-    toastMessage.value = ''
-    undoEntry.value = null
-  }, 5000)
+  showToast('Lançamento removido')
 }
 
 function onUndo() {
@@ -110,11 +108,44 @@ function closeSummary() {
   store.acknowledgeDayRollover()
 }
 
+function showToast(message: string) {
+  toastMessage.value = message
+  if (toastTimer) clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => {
+    toastMessage.value = ''
+    undoEntry.value = null
+  }, 5000)
+}
+
+async function onShare() {
+  try {
+    const mode = await shareDailyProgress()
+    showToast(mode === 'shared' ? 'Progresso compartilhado' : 'Copiado')
+  } catch {
+    /* usuário cancelou */
+  }
+}
+
+function consumeAddQuery() {
+  const raw = route.query.add
+  const value = Array.isArray(raw) ? raw[0] : raw
+  const ml = Number(value)
+  if (!Number.isFinite(ml) || ml <= 0) return
+  register(ml)
+  void router.replace({ name: 'home' })
+}
+
 onMounted(() => {
   checkDayRollover()
+  consumeAddQuery()
   dayCheckTimer = setInterval(checkDayRollover, 60_000)
   document.addEventListener('visibilitychange', onVisibility)
 })
+
+watch(
+  () => route.query.add,
+  () => consumeAddQuery(),
+)
 
 onUnmounted(() => {
   if (toastTimer) clearTimeout(toastTimer)
@@ -140,6 +171,14 @@ function onVisibility() {
         </div>
       </div>
       <div class="flex items-center gap-1">
+        <button
+          v-if="shareSupported"
+          type="button"
+          class="h-11 rounded-xl px-3 text-sm font-semibold text-teal"
+          @click="onShare"
+        >
+          Compartilhar
+        </button>
         <button
           type="button"
           class="h-11 rounded-xl px-3 text-sm font-semibold text-teal"
@@ -250,7 +289,7 @@ function onVisibility() {
     />
     <UndoToast
       :message="toastMessage"
-      action-label="Desfazer"
+      :action-label="undoEntry ? 'Desfazer' : undefined"
       @action="onUndo"
       @close="toastMessage = ''"
     />

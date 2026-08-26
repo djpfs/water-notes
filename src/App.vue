@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { RouterView } from 'vue-router'
 import InstallPromptSheet from '@/components/InstallPromptSheet.vue'
+import UpdateBanner from '@/components/UpdateBanner.vue'
 import { useNotifications } from '@/composables/useNotifications'
 import { useTheme } from '@/composables/useTheme'
 
@@ -16,6 +17,7 @@ useNotifications()
       </Transition>
     </RouterView>
     <InstallPromptSheet />
+    <UpdateBanner />
   </div>
 </template>
 

@@ -5,11 +5,14 @@ import AvatarPicker from '@/components/AvatarPicker.vue'
 import {
   disableNotifications,
   enableNotifications,
+  sendTestNotification,
   setNotificationInterval,
+  updateNotificationSettings,
 } from '@/composables/useNotifications'
 import { useAppStore } from '@/stores/app'
 import { ML_PER_KG, NOTIFICATION_INTERVALS, type ThemeMode } from '@/types'
 import { formatVolume } from '@/utils/date'
+import { formatClock, parseClock } from '@/utils/timeWindow'
 
 const router = useRouter()
 const store = useAppStore()
@@ -26,6 +29,22 @@ const bedtime = ref(
 )
 const notifError = ref('')
 const notifBusy = ref(false)
+const notifMsg = ref('')
+const windowStart = ref(
+  formatClock(
+    store.notifications.windowStartHour ?? 8,
+    store.notifications.windowStartMinute ?? 0,
+  ),
+)
+const windowEnd = ref(
+  formatClock(
+    store.notifications.windowEndHour ?? 22,
+    store.notifications.windowEndMinute ?? 0,
+  ),
+)
+const pauseWhenGoalReached = ref(
+  store.notifications.pauseWhenGoalReached !== false,
+)
 const backupMsg = ref('')
 const fileInput = ref<HTMLInputElement | null>(null)
 
@@ -131,6 +150,34 @@ async function onIntervalChange(event: Event) {
   await setNotificationInterval(value)
 }
 
+async function saveReminderWindow() {
+  const start = parseClock(windowStart.value)
+  const end = parseClock(windowEnd.value)
+  await updateNotificationSettings({
+    windowStartHour: start.hour,
+    windowStartMinute: start.minute,
+    windowEndHour: end.hour,
+    windowEndMinute: end.minute,
+    pauseWhenGoalReached: pauseWhenGoalReached.value,
+  })
+  notifMsg.value = 'Janela de lembretes salva.'
+}
+
+async function onTestNotification() {
+  notifError.value = ''
+  notifMsg.value = ''
+  notifBusy.value = true
+  try {
+    await sendTestNotification()
+    notifMsg.value = 'Notificação de teste enviada.'
+  } catch (err) {
+    notifError.value =
+      err instanceof Error ? err.message : 'Falha ao testar notificação.'
+  } finally {
+    notifBusy.value = false
+  }
+}
+
 function exportBackup() {
   const data = store.exportBackup()
   const blob = new Blob([JSON.stringify(data, null, 2)], {
@@ -229,23 +276,77 @@ async function onImportFile(event: Event) {
       >
         {{ store.notifications.enabled ? 'Lembretes ativos' : 'Ativar lembretes' }}
       </button>
-      <label v-if="store.notifications.enabled" class="mt-3 block">
-        <span class="mb-1.5 block text-sm text-ink-soft">Intervalo</span>
-        <select
-          class="h-12 w-full rounded-2xl bg-surface px-4 text-ink outline-none ring-1 ring-line focus:ring-2 focus:ring-teal"
-          :value="store.notifications.intervalMinutes"
-          @change="onIntervalChange"
-        >
-          <option
-            v-for="item in NOTIFICATION_INTERVALS"
-            :key="item.minutes"
-            :value="item.minutes"
+
+      <div v-if="store.notifications.enabled" class="mt-3 space-y-3">
+        <label class="block">
+          <span class="mb-1.5 block text-sm text-ink-soft">Intervalo</span>
+          <select
+            class="h-12 w-full rounded-2xl bg-surface px-4 text-ink outline-none ring-1 ring-line focus:ring-2 focus:ring-teal"
+            :value="store.notifications.intervalMinutes"
+            @change="onIntervalChange"
           >
-            A cada {{ item.label }}
-          </option>
-        </select>
-      </label>
+            <option
+              v-for="item in NOTIFICATION_INTERVALS"
+              :key="item.minutes"
+              :value="item.minutes"
+            >
+              A cada {{ item.label }}
+            </option>
+          </select>
+        </label>
+
+        <div class="grid grid-cols-2 gap-2">
+          <label class="block">
+            <span class="mb-1.5 block text-sm text-ink-soft">Das</span>
+            <input
+              v-model="windowStart"
+              type="time"
+              class="h-12 w-full rounded-2xl bg-surface px-3 text-ink outline-none ring-1 ring-line focus:ring-2 focus:ring-teal"
+            />
+          </label>
+          <label class="block">
+            <span class="mb-1.5 block text-sm text-ink-soft">Até</span>
+            <input
+              v-model="windowEnd"
+              type="time"
+              class="h-12 w-full rounded-2xl bg-surface px-3 text-ink outline-none ring-1 ring-line focus:ring-2 focus:ring-teal"
+            />
+          </label>
+        </div>
+
+        <label class="flex items-center gap-3 rounded-2xl bg-surface px-4 py-3 ring-1 ring-line">
+          <input
+            v-model="pauseWhenGoalReached"
+            type="checkbox"
+            class="size-5 accent-[oklch(0.48_0.08_195)]"
+          />
+          <span class="text-sm font-medium text-ink">Pausar se a meta já foi batida</span>
+        </label>
+
+        <button
+          type="button"
+          class="h-11 w-full rounded-2xl bg-mist-deep text-sm font-semibold text-ink"
+          @click="saveReminderWindow"
+        >
+          Salvar janela
+        </button>
+
+        <p class="text-xs text-ink-soft">
+          Em Chrome/Android (app instalado), também usa Periodic Background Sync
+          quando o sistema permitir. Push remoto exige servidor.
+        </p>
+      </div>
+
+      <button
+        type="button"
+        class="mt-3 h-11 w-full rounded-2xl bg-surface text-sm font-semibold text-teal ring-1 ring-line disabled:opacity-50"
+        :disabled="notifBusy"
+        @click="onTestNotification"
+      >
+        Testar notificação
+      </button>
       <p v-if="notifError" class="mt-2 text-sm text-amber-deep">{{ notifError }}</p>
+      <p v-if="notifMsg" class="mt-2 text-sm text-teal-deep">{{ notifMsg }}</p>
     </section>
 
     <section class="mt-8">

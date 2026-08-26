@@ -26,6 +26,24 @@ export type ThemeMode = 'system' | 'light' | 'dark'
 export interface NotificationSettings {
   enabled: boolean
   intervalMinutes: number
+  /** Início da janela de lembretes (hora local) */
+  windowStartHour: number
+  windowStartMinute: number
+  /** Fim da janela de lembretes (hora local) */
+  windowEndHour: number
+  windowEndMinute: number
+  /** Não notificar se a meta do dia já foi batida */
+  pauseWhenGoalReached: boolean
+}
+
+export const DEFAULT_NOTIFICATIONS: NotificationSettings = {
+  enabled: false,
+  intervalMinutes: 60,
+  windowStartHour: 8,
+  windowStartMinute: 0,
+  windowEndHour: 22,
+  windowEndMinute: 0,
+  pauseWhenGoalReached: true,
 }
 
 export interface DayStat {

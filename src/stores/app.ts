@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import {
   BACKUP_VERSION,
   DEFAULT_CUPS,
+  DEFAULT_NOTIFICATIONS,
   ML_PER_KG,
   type AppBackup,
   type Cup,
@@ -19,6 +20,16 @@ import {
   snapMl,
 } from '@/utils/date'
 import { createId } from '@/utils/id'
+
+function normalizeNotifications(
+  raw: Partial<NotificationSettings> | undefined,
+): NotificationSettings {
+  return {
+    ...DEFAULT_NOTIFICATIONS,
+    ...raw,
+    pauseWhenGoalReached: raw?.pauseWhenGoalReached !== false,
+  }
+}
 
 const emptyProfile = (): Profile => ({
   nickname: '',
@@ -50,10 +61,7 @@ export const useAppStore = defineStore(
     const entries = ref<WaterEntry[]>([])
     const celebratedDate = ref<string | null>(null)
     const theme = ref<ThemeMode>('system')
-    const notifications = ref<NotificationSettings>({
-      enabled: false,
-      intervalMinutes: 60,
-    })
+    const notifications = ref<NotificationSettings>({ ...DEFAULT_NOTIFICATIONS })
     const installDismissedAt = ref<string | null>(null)
     const lastActiveDate = ref<string | null>(null)
     const lastSummaryDate = ref<string | null>(null)
@@ -244,7 +252,10 @@ export const useAppStore = defineStore(
     }
 
     function setNotifications(partial: Partial<NotificationSettings>) {
-      notifications.value = { ...notifications.value, ...partial }
+      notifications.value = normalizeNotifications({
+        ...notifications.value,
+        ...partial,
+      })
     }
 
     function dismissInstall() {
@@ -308,10 +319,7 @@ export const useAppStore = defineStore(
       cups.value = raw.cups.length ? raw.cups.map((c) => ({ ...c })) : [...DEFAULT_CUPS]
       entries.value = raw.entries.map((e) => ({ ...e }))
       theme.value = raw.theme ?? 'system'
-      notifications.value = raw.notifications ?? {
-        enabled: false,
-        intervalMinutes: 60,
-      }
+      notifications.value = normalizeNotifications(raw.notifications)
       celebratedDate.value = raw.celebratedDate ?? null
       installDismissedAt.value = raw.installDismissedAt ?? null
       lastActiveDate.value = raw.lastActiveDate ?? localDateKey()
@@ -378,8 +386,13 @@ export const useAppStore = defineStore(
       afterHydrate: (ctx) => {
         const store = ctx.store as unknown as {
           profile: Profile
+          notifications: NotificationSettings
         }
         Object.assign(store.profile, normalizeProfile(store.profile))
+        Object.assign(
+          store.notifications,
+          normalizeNotifications(store.notifications),
+        )
       },
     },
   },
