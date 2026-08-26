@@ -9,6 +9,7 @@ import {
 import {
   SESSION_DAYS,
   createSession,
+  deleteUserAccount,
   destroySession,
   getSessionUser,
   upsertGoogleUser,
@@ -163,6 +164,16 @@ export async function me(c: Context<AppEnv>) {
 
 export async function logout(c: Context<AppEnv>) {
   await destroySession(c.env.DB, c.req.raw)
+  const res = json({ ok: true })
+  res.headers.append('Set-Cookie', clearSessionCookie(isSecureRequest(c)))
+  return res
+}
+
+export async function deleteAccount(c: Context<AppEnv>) {
+  const user = await getSessionUser(c.req.raw, c.env.DB)
+  if (!user) return unauthorized()
+
+  await deleteUserAccount(c.env.DB, user.id)
   const res = json({ ok: true })
   res.headers.append('Set-Cookie', clearSessionCookie(isSecureRequest(c)))
   return res

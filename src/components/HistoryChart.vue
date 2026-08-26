@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { DayStat } from '@/types'
-import { formatDayLabel, formatVolume } from '@/utils/date'
+import { formatChartDayLabel, formatVolume } from '@/utils/date'
 
 const props = defineProps<{
   days: DayStat[]
+  range: 7 | 30
 }>()
 
 const maxValue = computed(() =>
@@ -13,32 +14,51 @@ const maxValue = computed(() =>
     ...props.days.map((d) => Math.max(d.consumedMl, d.goalMl)),
   ),
 )
+
+const compact = computed(() => props.range > 7)
+const barMinWidth = computed(() => (compact.value ? 22 : 0))
 </script>
 
 <template>
   <div class="rounded-3xl bg-surface p-4 ring-1 ring-line">
-    <div class="flex h-40 items-end gap-1.5">
+    <div
+      class="chart-scroll"
+      :class="compact ? 'overflow-x-auto pb-1 -mx-1 px-1' : ''"
+    >
       <div
-        v-for="day in days"
-        :key="day.date"
-        class="flex min-w-0 flex-1 flex-col items-center justify-end gap-1"
+        class="flex items-end gap-1.5"
+        :class="compact ? 'min-w-max' : 'h-40'"
+        :style="compact ? undefined : { height: '10rem' }"
       >
-        <div class="relative flex h-28 w-full items-end justify-center">
+        <div
+          v-for="day in days"
+          :key="day.date"
+          class="flex shrink-0 flex-col items-center justify-end gap-1"
+          :style="compact ? { width: `${barMinWidth}px` } : { flex: '1 1 0', minWidth: 0 }"
+        >
           <div
-            class="absolute bottom-0 w-[55%] rounded-t-md bg-line/70"
-            :style="{ height: `${(day.goalMl / maxValue) * 100}%` }"
-            title="Meta"
-          />
-          <div
-            class="relative w-[55%] rounded-t-md transition-all"
-            :class="day.reached ? 'bg-teal' : 'bg-water-deep'"
-            :style="{ height: `${(day.consumedMl / maxValue) * 100}%` }"
-            :title="formatVolume(day.consumedMl)"
-          />
+            class="relative flex w-full items-end justify-center"
+            :class="compact ? 'h-28' : 'h-28'"
+          >
+            <div
+              class="absolute bottom-0 w-[55%] rounded-t-md bg-line/70"
+              :style="{ height: `${(day.goalMl / maxValue) * 100}%` }"
+              title="Meta"
+            />
+            <div
+              class="relative w-[55%] rounded-t-md transition-all"
+              :class="day.reached ? 'bg-teal' : 'bg-water-deep'"
+              :style="{ height: `${(day.consumedMl / maxValue) * 100}%` }"
+              :title="formatVolume(day.consumedMl)"
+            />
+          </div>
+          <span
+            class="block w-full text-center text-[10px] font-medium leading-none text-ink-soft"
+            :class="compact ? 'tabular-nums' : 'truncate'"
+          >
+            {{ formatChartDayLabel(day.date, range) }}
+          </span>
         </div>
-        <span class="truncate text-[10px] font-medium text-ink-soft">
-          {{ formatDayLabel(day.date).replace('.', '') }}
-        </span>
       </div>
     </div>
     <div class="mt-3 flex gap-4 text-xs text-ink-soft">
@@ -51,3 +71,13 @@ const maxValue = computed(() =>
     </div>
   </div>
 </template>
+
+<style scoped>
+.chart-scroll {
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.chart-scroll::-webkit-scrollbar {
+  display: none;
+}
+</style>

@@ -44,6 +44,12 @@ export async function destroySession(db: D1Database, request: Request) {
   await db.prepare(`DELETE FROM sessions WHERE id = ?`).bind(sessionId).run()
 }
 
+export async function deleteUserAccount(db: D1Database, userId: string) {
+  await db.prepare(`DELETE FROM user_data WHERE user_id = ?`).bind(userId).run()
+  await db.prepare(`DELETE FROM sessions WHERE user_id = ?`).bind(userId).run()
+  await db.prepare(`DELETE FROM users WHERE id = ?`).bind(userId).run()
+}
+
 export async function upsertGoogleUser(
   db: D1Database,
   profile: { sub: string; email: string; name?: string; picture?: string },

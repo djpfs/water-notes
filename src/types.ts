@@ -9,6 +9,7 @@ export interface Profile {
   bedtimeMinute: number
   email: string | null
   photoUrl: string | null
+  useProfilePhoto: boolean
 }
 
 export interface Cup {

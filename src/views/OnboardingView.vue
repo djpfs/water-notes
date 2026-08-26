@@ -13,6 +13,7 @@ const step = ref(0)
 const nickname = ref(store.profile.nickname || '')
 const weightKg = ref(String(store.profile.weightKg || 70))
 const avatarId = ref(store.profile.avatarId || 'drop')
+const useProfilePhoto = ref(store.profile.useProfilePhoto)
 const useCustomGoal = ref(false)
 const customGoal = ref('')
 
@@ -40,7 +41,11 @@ const customGoalNumber = computed(() => {
 const canNext = computed(() => {
   if (step.value === 0) return nickname.value.trim().length >= 2
   if (step.value === 1) return weightNumber.value >= 20 && weightNumber.value <= 300
-  if (step.value === 2) return Boolean(avatarId.value)
+  if (step.value === 2) {
+    return useProfilePhoto.value
+      ? Boolean(store.profile.photoUrl)
+      : Boolean(avatarId.value)
+  }
   if (step.value === 3) {
     if (!useCustomGoal.value) return true
     return customGoalNumber.value >= 500 && customGoalNumber.value <= 10000
@@ -53,6 +58,7 @@ function finish() {
     nickname: nickname.value,
     weightKg: weightNumber.value,
     avatarId: avatarId.value,
+    useProfilePhoto: useProfilePhoto.value,
     goalOverrideMl: useCustomGoal.value ? customGoalNumber.value : null,
   })
   router.push({ name: 'goal-reveal' })
@@ -135,7 +141,11 @@ function back() {
       </div>
 
       <div v-else-if="step === 2">
-        <AvatarPicker v-model="avatarId" />
+        <AvatarPicker
+          v-model="avatarId"
+          v-model:use-photo="useProfilePhoto"
+          :photo-url="store.profile.photoUrl"
+        />
       </div>
 
       <div v-else>

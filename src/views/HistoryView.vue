@@ -79,7 +79,7 @@ const totalConsumed = computed(() =>
     </div>
 
     <section class="mt-4">
-      <HistoryChart :days="days" />
+      <HistoryChart :days="days" :range="range" />
     </section>
 
     <ul class="mt-5 space-y-2">

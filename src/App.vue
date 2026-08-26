@@ -10,7 +10,7 @@ useNotifications()
 </script>
 
 <template>
-  <div class="mx-auto flex min-h-dvh w-full max-w-md flex-col">
+  <div class="app-root mx-auto flex min-h-dvh w-full max-w-md flex-col">
     <RouterView v-slot="{ Component }">
       <Transition name="fade" mode="out-in">
         <component :is="Component" />

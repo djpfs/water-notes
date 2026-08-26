@@ -41,6 +41,7 @@ const emptyProfile = (): Profile => ({
   bedtimeMinute: 0,
   email: null,
   photoUrl: null,
+  useProfilePhoto: false,
 })
 
 function normalizeProfile(raw: Partial<Profile> | undefined): Profile {
@@ -54,6 +55,9 @@ function normalizeProfile(raw: Partial<Profile> | undefined): Profile {
     bedtimeMinute: raw?.bedtimeMinute ?? 0,
     email: raw?.email ?? null,
     photoUrl: raw?.photoUrl ?? null,
+    useProfilePhoto:
+      raw?.useProfilePhoto === true ||
+      (raw?.useProfilePhoto === undefined && Boolean(raw?.photoUrl)),
   }
 }
 
@@ -159,6 +163,7 @@ export const useAppStore = defineStore(
       nickname: string
       weightKg: number
       avatarId: string
+      useProfilePhoto?: boolean
       goalOverrideMl?: number | null
     }) {
       profile.value = normalizeProfile({
@@ -166,6 +171,7 @@ export const useAppStore = defineStore(
         nickname: data.nickname.trim(),
         weightKg: data.weightKg,
         avatarId: data.avatarId,
+        useProfilePhoto: data.useProfilePhoto ?? profile.value.useProfilePhoto,
         onboarded: true,
         goalOverrideMl:
           data.goalOverrideMl === undefined
@@ -272,6 +278,10 @@ export const useAppStore = defineStore(
         ...profile.value,
         email: data.email ?? profile.value.email,
         photoUrl: data.picture ?? profile.value.photoUrl,
+        useProfilePhoto:
+          data.picture && !profile.value.onboarded
+            ? true
+            : profile.value.useProfilePhoto,
         nickname:
           profile.value.nickname.trim() ||
           first ||
@@ -354,6 +364,18 @@ export const useAppStore = defineStore(
       lastSummaryDate.value = raw.lastSummaryDate ?? null
     }
 
+    function resetAll() {
+      profile.value = emptyProfile()
+      cups.value = [...DEFAULT_CUPS]
+      entries.value = []
+      celebratedDate.value = null
+      theme.value = 'system'
+      notifications.value = { ...DEFAULT_NOTIFICATIONS }
+      installDismissedAt.value = null
+      lastActiveDate.value = null
+      lastSummaryDate.value = null
+    }
+
     return {
       profile,
       cups,
@@ -398,6 +420,7 @@ export const useAppStore = defineStore(
       touchActiveDate,
       exportBackup,
       importBackup,
+      resetAll,
     }
   },
   {

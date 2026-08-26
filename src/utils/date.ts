@@ -39,6 +39,18 @@ export function formatDayLabel(key: string): string {
   })
 }
 
+/** Legenda curta para gráfico (7 = dia da semana, 30 = dia do mês). */
+export function formatChartDayLabel(key: string, range: 7 | 30): string {
+  const date = parseDateKey(key)
+  if (range <= 7) {
+    return date
+      .toLocaleDateString('pt-BR', { weekday: 'short' })
+      .replace('.', '')
+      .slice(0, 3)
+  }
+  return String(date.getDate())
+}
+
 /** Hours remaining until bedtime today (or tomorrow if already past). Min 0.25. */
 export function hoursUntilBedtime(hour: number, minute: number, now = new Date()): number {
   const bed = new Date(now)

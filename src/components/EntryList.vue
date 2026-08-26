@@ -1,8 +1,9 @@
 <script setup lang="ts">
+import { computed, ref } from 'vue'
 import type { WaterEntry } from '@/types'
 import { formatTime, formatVolume } from '@/utils/date'
 
-defineProps<{
+const props = defineProps<{
   entries: WaterEntry[]
 }>()
 
@@ -10,6 +11,17 @@ defineEmits<{
   remove: [id: string]
   edit: [entry: WaterEntry]
 }>()
+
+const PREVIEW = 5
+const showAll = ref(false)
+
+const visibleEntries = computed(() =>
+  showAll.value ? props.entries : props.entries.slice(0, PREVIEW),
+)
+
+const hiddenCount = computed(() =>
+  Math.max(0, props.entries.length - PREVIEW),
+)
 </script>
 
 <template>
@@ -38,28 +50,47 @@ defineEmits<{
       </p>
     </div>
 
-    <ul v-else class="mt-3 space-y-2">
-      <li
-        v-for="entry in entries"
-        :key="entry.id"
-        class="flex items-center justify-between gap-2 rounded-2xl bg-surface px-3 py-3 ring-1 ring-line"
+    <template v-else>
+      <ul class="mt-3 space-y-2">
+        <li
+          v-for="entry in visibleEntries"
+          :key="entry.id"
+          class="flex items-center justify-between gap-2 rounded-2xl bg-surface px-3 py-3 ring-1 ring-line"
+        >
+          <button
+            type="button"
+            class="min-w-0 flex-1 rounded-xl px-1 text-left"
+            @click="$emit('edit', entry)"
+          >
+            <p class="font-semibold text-ink">{{ formatVolume(entry.ml) }}</p>
+            <p class="text-xs text-ink-soft">{{ formatTime(entry.at) }} · editar</p>
+          </button>
+          <button
+            type="button"
+            class="h-10 shrink-0 rounded-xl px-3 text-sm font-medium text-ink-soft transition hover:bg-mist-deep hover:text-ink"
+            @click="$emit('remove', entry.id)"
+          >
+            Remover
+          </button>
+        </li>
+      </ul>
+
+      <button
+        v-if="hiddenCount > 0 && !showAll"
+        type="button"
+        class="mt-2 h-10 w-full rounded-xl text-sm font-semibold text-teal"
+        @click="showAll = true"
       >
-        <button
-          type="button"
-          class="min-w-0 flex-1 rounded-xl px-1 text-left"
-          @click="$emit('edit', entry)"
-        >
-          <p class="font-semibold text-ink">{{ formatVolume(entry.ml) }}</p>
-          <p class="text-xs text-ink-soft">{{ formatTime(entry.at) }} · editar</p>
-        </button>
-        <button
-          type="button"
-          class="h-10 shrink-0 rounded-xl px-3 text-sm font-medium text-ink-soft transition hover:bg-mist-deep hover:text-ink"
-          @click="$emit('remove', entry.id)"
-        >
-          Remover
-        </button>
-      </li>
-    </ul>
+        Ver mais ({{ hiddenCount }})
+      </button>
+      <button
+        v-else-if="showAll && entries.length > PREVIEW"
+        type="button"
+        class="mt-2 h-10 w-full rounded-xl text-sm font-semibold text-ink-soft"
+        @click="showAll = false"
+      >
+        Ver menos
+      </button>
+    </template>
   </section>
 </template>

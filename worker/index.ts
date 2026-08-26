@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { getSync, putSync } from './sync'
-import { googleCallback, logout, me, startGoogleAuth } from './google'
+import { googleCallback, deleteAccount, logout, me, startGoogleAuth } from './google'
 import type { Env } from './types'
 
 type AppEnv = { Bindings: Env }
@@ -11,6 +11,7 @@ api.get('/auth/google', startGoogleAuth)
 api.get('/auth/callback', googleCallback)
 api.get('/auth/me', me)
 api.post('/auth/logout', logout)
+api.delete('/auth/account', deleteAccount)
 api.get('/sync', getSync)
 api.put('/sync', putSync)
 api.get('/health', (c) => c.json({ ok: true }))

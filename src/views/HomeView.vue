@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import AvatarIcon from '@/components/AvatarIcon.vue'
+import ProfileAvatar from '@/components/ProfileAvatar.vue'
 import CupShortcutBar from '@/components/CupShortcutBar.vue'
 import DaySummaryModal from '@/components/DaySummaryModal.vue'
 import EditEntrySheet from '@/components/EditEntrySheet.vue'
@@ -9,7 +9,10 @@ import EntryList from '@/components/EntryList.vue'
 import GoalCelebration from '@/components/GoalCelebration.vue'
 import QuickAddSheet from '@/components/QuickAddSheet.vue'
 import UndoToast from '@/components/UndoToast.vue'
+import UserProfileModal from '@/components/UserProfileModal.vue'
 import WaterVessel from '@/components/WaterVessel.vue'
+import { usePwaUpdate } from '@/composables/usePwaUpdate'
+import { usePullToRefresh } from '@/composables/usePullToRefresh'
 import { useAppStore } from '@/stores/app'
 import type { Cup, DayStat, WaterEntry } from '@/types'
 import { formatVolume } from '@/utils/date'
@@ -27,8 +30,10 @@ const editing = ref<WaterEntry | null>(null)
 const toastMessage = ref('')
 const undoEntry = ref<WaterEntry | null>(null)
 const summaryOpen = ref(false)
+const profileOpen = ref(false)
 const yesterday = ref<DayStat | null>(null)
 const shareSupported = canShare()
+const { checkForUpdate, needRefresh } = usePwaUpdate()
 const themeLabel = computed(() => {
   if (store.theme === 'dark') return 'Tema escuro'
   if (store.theme === 'light') return 'Tema claro'
@@ -36,6 +41,24 @@ const themeLabel = computed(() => {
 })
 let toastTimer: ReturnType<typeof setTimeout> | undefined
 let dayCheckTimer: ReturnType<typeof setInterval> | undefined
+
+const mainRef = ref<HTMLElement | null>(null)
+const { pullDistance, refreshing, threshold, bind } = usePullToRefresh(
+  async () => {
+    const hasUpdate = await checkForUpdate()
+    if (hasUpdate || needRefresh.value) {
+      showToast('Nova versão disponível')
+    } else {
+      showToast('App atualizado')
+    }
+  },
+)
+
+const pullHint = computed(() => {
+  if (refreshing.value) return 'Verificando atualizações…'
+  if (pullDistance.value >= threshold) return 'Solte para atualizar'
+  return 'Puxe para atualizar'
+})
 
 watch(
   () => store.todayConsumedMl,
@@ -125,7 +148,13 @@ function showToast(message: string) {
 async function onShare() {
   try {
     const mode = await shareDailyProgress()
-    showToast(mode === 'shared' ? 'Progresso compartilhado' : 'Copiado')
+    showToast(
+      mode === 'shared'
+        ? 'Imagem compartilhada'
+        : mode === 'downloaded'
+          ? 'Imagem salva — compartilhe no Instagram'
+          : 'Copiado',
+    )
   } catch {
     /* usuário cancelou */
   }
@@ -141,6 +170,7 @@ function consumeAddQuery() {
 }
 
 onMounted(() => {
+  bind(mainRef.value)
   checkDayRollover()
   consumeAddQuery()
   dayCheckTimer = setInterval(checkDayRollover, 60_000)
@@ -164,24 +194,27 @@ function onVisibility() {
 </script>
 
 <template>
-  <main class="safe-pb flex min-h-dvh flex-col px-5 pb-6">
+  <main ref="mainRef" class="safe-pb flex min-h-dvh flex-col px-5 pb-6">
     <header class="app-bar flex items-center justify-between gap-2">
-      <div class="flex min-w-0 items-center gap-3">
-        <img
-          v-if="store.profile.photoUrl"
-          :src="store.profile.photoUrl"
-          alt=""
-          class="h-11 w-11 shrink-0 rounded-full object-cover ring-1 ring-line"
-          referrerpolicy="no-referrer"
+      <button
+        type="button"
+        class="flex min-w-0 items-center gap-3 rounded-xl text-left active:opacity-80"
+        aria-label="Ver perfil"
+        @click="profileOpen = true"
+      >
+        <ProfileAvatar
+          :avatar-id="store.profile.avatarId"
+          :use-profile-photo="store.profile.useProfilePhoto"
+          :photo-url="store.profile.photoUrl"
+          :size="44"
         />
-        <AvatarIcon v-else :id="store.profile.avatarId" :size="44" />
         <div class="min-w-0">
           <p class="text-xs font-medium text-ink-soft">Olá,</p>
           <p class="truncate font-display text-lg font-bold leading-tight text-ink">
             {{ store.profile.nickname }}
           </p>
         </div>
-      </div>
+      </button>
       <div class="flex shrink-0 items-center gap-0.5">
         <button
           type="button"
@@ -305,6 +338,33 @@ function onVisibility() {
     </header>
 
     <div
+      class="flex items-center justify-center overflow-hidden text-sm text-ink-soft transition-[height] duration-200"
+      :style="{ height: pullDistance > 0 || refreshing ? `${Math.max(pullDistance, refreshing ? threshold : 0)}px` : '0px' }"
+      aria-live="polite"
+    >
+      <div
+        v-if="pullDistance > 0 || refreshing"
+        class="flex items-center gap-2"
+      >
+        <svg
+          class="size-4 shrink-0 text-teal"
+          :class="refreshing ? 'animate-spin' : ''"
+          viewBox="0 0 24 24"
+          fill="none"
+          aria-hidden="true"
+        >
+          <path
+            d="M12 4a8 8 0 018 8"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+          />
+        </svg>
+        <span>{{ pullHint }}</span>
+      </div>
+    </div>
+
+    <div
       v-if="store.streak > 0"
       class="mt-3 rounded-2xl bg-teal/10 px-4 py-2 text-center text-sm font-semibold text-teal-deep"
     >
@@ -394,6 +454,10 @@ function onVisibility() {
       :summary="yesterday"
       :streak="store.streak"
       @continue="closeSummary"
+    />
+    <UserProfileModal
+      v-model:open="profileOpen"
+      @settings="router.push({ name: 'settings' })"
     />
     <UndoToast
       :message="toastMessage"

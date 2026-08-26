@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
-import AvatarIcon from '@/components/AvatarIcon.vue'
+import ProfileAvatar from '@/components/ProfileAvatar.vue'
 import { useAppStore } from '@/stores/app'
 import { formatVolume } from '@/utils/date'
 
@@ -15,7 +15,12 @@ function start() {
 <template>
   <main class="safe-pb safe-pt flex min-h-dvh flex-col px-5">
     <div class="flex flex-1 flex-col items-center justify-center text-center">
-      <AvatarIcon :id="store.profile.avatarId" :size="88" />
+      <ProfileAvatar
+        :avatar-id="store.profile.avatarId"
+        :use-profile-photo="store.profile.useProfilePhoto"
+        :photo-url="store.profile.photoUrl"
+        :size="88"
+      />
       <p class="mt-5 text-sm font-medium text-teal">
         Olá, {{ store.profile.nickname }}
       </p>

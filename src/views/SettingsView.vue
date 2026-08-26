@@ -2,9 +2,12 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import AvatarPicker from '@/components/AvatarPicker.vue'
+import ConfirmSheet from '@/components/ConfirmSheet.vue'
+import CupSheet from '@/components/CupSheet.vue'
 import {
   type AuthUser,
   clearAuthCache,
+  deleteAccountRemote,
   fetchMe,
   logoutRemote,
   pullAndMerge,
@@ -35,6 +38,7 @@ const cloudError = ref('')
 const nickname = ref(store.profile.nickname)
 const weightKg = ref(String(store.profile.weightKg))
 const avatarId = ref(store.profile.avatarId)
+const useProfilePhoto = ref(store.profile.useProfilePhoto)
 const useCustomGoal = ref(store.profile.goalOverrideMl != null)
 const customGoal = ref(
   String(store.profile.goalOverrideMl ?? store.defaultGoalMl),
@@ -61,13 +65,18 @@ const pauseWhenGoalReached = ref(
   store.notifications.pauseWhenGoalReached !== false,
 )
 const backupMsg = ref('')
+const profileMsg = ref('')
+const metaMsg = ref('')
 const fileInput = ref<HTMLInputElement | null>(null)
 
-const newLabel = ref('')
-const newMl = ref('250')
-const editingId = ref<string | null>(null)
-const editLabel = ref('')
-const editMl = ref('')
+const cupSheetOpen = ref(false)
+const cupSheetMode = ref<'add' | 'edit'>('add')
+const editingCupId = ref<string | null>(null)
+const editingCupLabel = ref('')
+const editingCupMl = ref(0)
+const deleteConfirmOpen = ref(false)
+const accountDeleteOpen = ref(false)
+const deletingCupId = ref<string | null>(null)
 
 const weightNumber = computed(() => {
   const n = Number(String(weightKg.value).replace(',', '.'))
@@ -83,13 +92,14 @@ const customGoalNumber = computed(() => {
   return Number.isFinite(n) ? n : 0
 })
 
-const profileValid = computed(() => {
+const profileFieldsValid = computed(() => {
   if (nickname.value.trim().length < 2) return false
-  if (weightNumber.value < 20 || weightNumber.value > 300) return false
-  if (useCustomGoal.value) {
-    return customGoalNumber.value >= 500 && customGoalNumber.value <= 10000
-  }
-  return true
+  return weightNumber.value >= 20 && weightNumber.value <= 300
+})
+
+const metaValid = computed(() => {
+  if (!useCustomGoal.value) return true
+  return customGoalNumber.value >= 500 && customGoalNumber.value <= 10000
 })
 
 const themes: { id: ThemeMode; label: string }[] = [
@@ -105,7 +115,7 @@ type Section = {
 }
 
 const sections: Section[] = [
-  { id: 'conta', title: 'Conta', keywords: 'conta login google sync sincronizar sair nuvem' },
+  { id: 'conta', title: 'Conta', keywords: 'conta login google sync sincronizar sair excluir apagar delete' },
   { id: 'perfil', title: 'Perfil', keywords: 'perfil apelido peso avatar foto' },
   { id: 'meta', title: 'Meta', keywords: 'meta ml peso objetivo dormir horário' },
   { id: 'lembretes', title: 'Lembretes', keywords: 'lembretes notificação intervalo janela pausar' },
@@ -141,43 +151,64 @@ function parseBedtime(): { bedtimeHour: number; bedtimeMinute: number } {
   }
 }
 
-function saveProfile() {
-  if (!profileValid.value) return
+function saveProfileFields() {
+  if (!profileFieldsValid.value) return
   store.updateProfile({
     nickname: nickname.value,
     weightKg: weightNumber.value,
     avatarId: avatarId.value,
+    useProfilePhoto: useProfilePhoto.value,
+  })
+  profileMsg.value = 'Perfil salvo.'
+}
+
+function saveMeta() {
+  if (!metaValid.value) return
+  store.updateProfile({
     goalOverrideMl: useCustomGoal.value ? customGoalNumber.value : null,
     ...parseBedtime(),
   })
-  backupMsg.value = 'Perfil salvo.'
+  metaMsg.value = 'Meta salva.'
 }
 
-function addCup() {
-  const ml = Number(String(newMl.value).replace(',', '.'))
-  if (!Number.isFinite(ml) || ml <= 0) return
-  store.addCup(newLabel.value || 'Copo', ml)
-  newLabel.value = ''
-  newMl.value = '250'
+function openAddCup() {
+  cupSheetMode.value = 'add'
+  editingCupId.value = null
+  cupSheetOpen.value = true
 }
 
-function startEdit(id: string, label: string, ml: number) {
-  editingId.value = id
-  editLabel.value = label
-  editMl.value = String(ml)
+function openEditCup(id: string, label: string, ml: number) {
+  editingCupLabel.value = label
+  editingCupMl.value = ml
+  cupSheetMode.value = 'edit'
+  editingCupId.value = id
+  cupSheetOpen.value = true
 }
 
-function saveEdit() {
-  if (!editingId.value) return
-  const ml = Number(String(editMl.value).replace(',', '.'))
-  if (!Number.isFinite(ml) || ml <= 0) return
-  store.updateCup(editingId.value, editLabel.value, ml)
-  editingId.value = null
+function onCupSave(label: string, ml: number) {
+  if (cupSheetMode.value === 'edit' && editingCupId.value) {
+    store.updateCup(editingCupId.value, label, ml)
+    return
+  }
+  store.addCup(label, ml)
 }
 
-function cancelEdit() {
-  editingId.value = null
+function askDeleteCup(id: string) {
+  deletingCupId.value = id
+  deleteConfirmOpen.value = true
 }
+
+function confirmDeleteCup() {
+  if (deletingCupId.value) {
+    store.removeCup(deletingCupId.value)
+  }
+  deletingCupId.value = null
+}
+
+const deletingCupLabel = computed(() => {
+  const cup = store.cups.find((c) => c.id === deletingCupId.value)
+  return cup?.label ?? 'este copo'
+})
 
 async function toggleNotifications() {
   notifError.value = ''
@@ -210,6 +241,23 @@ async function onLogout() {
     await router.replace({ name: 'login' })
   } catch (err) {
     cloudError.value = err instanceof Error ? err.message : 'Falha ao sair.'
+  } finally {
+    cloudBusy.value = false
+  }
+}
+
+async function confirmDeleteAccount() {
+  cloudBusy.value = true
+  cloudError.value = ''
+  cloudMsg.value = ''
+  try {
+    await deleteAccountRemote()
+    store.resetAll()
+    cloudUser.value = null
+    await router.replace({ name: 'login' })
+  } catch (err) {
+    cloudError.value =
+      err instanceof Error ? err.message : 'Não foi possível excluir a conta.'
   } finally {
     cloudBusy.value = false
   }
@@ -303,6 +351,7 @@ async function onImportFile(event: Event) {
     nickname.value = store.profile.nickname
     weightKg.value = String(store.profile.weightKg)
     avatarId.value = store.profile.avatarId
+    useProfilePhoto.value = store.profile.useProfilePhoto
     useCustomGoal.value = store.profile.goalOverrideMl != null
     customGoal.value = String(
       store.profile.goalOverrideMl ?? store.defaultGoalMl,
@@ -414,6 +463,14 @@ async function onImportFile(event: Event) {
           >
             Sair
           </button>
+          <button
+            type="button"
+            class="flex h-12 w-full items-center px-4 text-left text-sm font-medium text-amber-deep disabled:opacity-50"
+            :disabled="cloudBusy"
+            @click="accountDeleteOpen = true"
+          >
+            Excluir conta
+          </button>
         </div>
         <p v-else class="px-4 py-3 text-sm text-ink-soft">
           Entre na tela inicial para sincronizar entre aparelhos.
@@ -451,9 +508,22 @@ async function onImportFile(event: Event) {
         </label>
         <div class="px-4 py-3">
           <p class="mb-2 text-xs text-ink-soft">Avatar</p>
-          <AvatarPicker v-model="avatarId" />
+          <AvatarPicker
+            v-model="avatarId"
+            v-model:use-photo="useProfilePhoto"
+            :photo-url="store.profile.photoUrl || cloudUser?.picture"
+          />
         </div>
       </div>
+      <button
+        type="button"
+        class="mt-3 h-11 w-full rounded-2xl bg-teal text-sm font-semibold text-surface-raised disabled:opacity-40"
+        :disabled="!profileFieldsValid"
+        @click="saveProfileFields"
+      >
+        Salvar perfil
+      </button>
+      <p v-if="profileMsg" class="mt-2 px-1 text-sm text-teal-deep">{{ profileMsg }}</p>
     </section>
 
     <section v-if="show('meta')" class="mt-7">
@@ -497,11 +567,12 @@ async function onImportFile(event: Event) {
       <button
         type="button"
         class="mt-3 h-11 w-full rounded-2xl bg-teal text-sm font-semibold text-surface-raised disabled:opacity-40"
-        :disabled="!profileValid"
-        @click="saveProfile"
+        :disabled="!metaValid"
+        @click="saveMeta"
       >
-        Salvar perfil e meta
+        Salvar meta
       </button>
+      <p v-if="metaMsg" class="mt-2 px-1 text-sm text-teal-deep">{{ metaMsg }}</p>
     </section>
 
     <section v-if="show('lembretes')" class="mt-7">
@@ -618,44 +689,31 @@ async function onImportFile(event: Event) {
       <h2 class="mb-2 px-1 text-[13px] font-semibold uppercase tracking-wide text-ink-soft">
         Copos
       </h2>
-      <ul class="overflow-hidden rounded-2xl bg-surface ring-1 ring-line">
-        <li
-          v-for="cup in store.cups"
-          :key="cup.id"
-          class="border-b border-line px-4 py-3 last:border-b-0"
-        >
-          <div v-if="editingId === cup.id" class="space-y-2">
-            <input
-              v-model="editLabel"
-              type="text"
-              class="h-11 w-full rounded-xl bg-mist px-3 outline-none ring-1 ring-line focus:ring-2 focus:ring-teal"
-              placeholder="Nome"
-            />
-            <input
-              v-model="editMl"
-              type="number"
-              inputmode="numeric"
-              class="h-11 w-full rounded-xl bg-mist px-3 outline-none ring-1 ring-line focus:ring-2 focus:ring-teal"
-              placeholder="ml"
-            />
-            <div class="flex gap-2">
-              <button
-                type="button"
-                class="h-10 flex-1 rounded-xl bg-mist-deep text-sm font-semibold text-ink-soft"
-                @click="cancelEdit"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                class="h-10 flex-1 rounded-xl bg-teal text-sm font-semibold text-surface-raised"
-                @click="saveEdit"
-              >
-                Salvar
-              </button>
-            </div>
-          </div>
-          <div v-else class="flex items-center justify-between gap-2">
+      <div class="overflow-hidden rounded-2xl bg-surface ring-1 ring-line">
+        <div class="flex items-center justify-between border-b border-line px-4 py-3">
+          <p class="text-sm font-semibold text-ink">Atalhos</p>
+          <button
+            type="button"
+            class="flex h-9 w-9 items-center justify-center rounded-xl bg-teal text-surface-raised"
+            aria-label="Adicionar copo"
+            @click="openAddCup"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path
+                d="M12 5v14M5 12h14"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+              />
+            </svg>
+          </button>
+        </div>
+        <ul>
+          <li
+            v-for="cup in store.cups"
+            :key="cup.id"
+            class="flex items-center justify-between gap-2 border-b border-line px-4 py-3 last:border-b-0"
+          >
             <div>
               <p class="font-semibold text-ink">{{ cup.label }}</p>
               <p class="text-xs text-ink-soft">{{ formatVolume(cup.ml) }}</p>
@@ -664,7 +722,7 @@ async function onImportFile(event: Event) {
               <button
                 type="button"
                 class="h-10 rounded-xl px-3 text-sm font-medium text-teal"
-                @click="startEdit(cup.id, cup.label, cup.ml)"
+                @click="openEditCup(cup.id, cup.label, cup.ml)"
               >
                 Editar
               </button>
@@ -672,38 +730,29 @@ async function onImportFile(event: Event) {
                 type="button"
                 class="h-10 rounded-xl px-3 text-sm font-medium text-ink-soft disabled:opacity-30"
                 :disabled="store.cups.length <= 1"
-                @click="store.removeCup(cup.id)"
+                @click="askDeleteCup(cup.id)"
               >
                 Excluir
               </button>
             </div>
-          </div>
-        </li>
-      </ul>
-
-      <div class="mt-3 space-y-2 overflow-hidden rounded-2xl bg-surface p-4 ring-1 ring-line">
-        <p class="text-sm font-semibold text-ink">Novo copo</p>
-        <input
-          v-model="newLabel"
-          type="text"
-          placeholder="Nome (ex.: Squeeze)"
-          class="h-11 w-full rounded-xl bg-mist px-3 outline-none ring-1 ring-line focus:ring-2 focus:ring-teal"
-        />
-        <input
-          v-model="newMl"
-          type="number"
-          inputmode="numeric"
-          placeholder="ml"
-          class="h-11 w-full rounded-xl bg-mist px-3 outline-none ring-1 ring-line focus:ring-2 focus:ring-teal"
-        />
-        <button
-          type="button"
-          class="h-11 w-full rounded-xl bg-teal font-semibold text-surface-raised"
-          @click="addCup"
-        >
-          Adicionar
-        </button>
+          </li>
+        </ul>
       </div>
+
+      <CupSheet
+        v-model:open="cupSheetOpen"
+        :mode="cupSheetMode"
+        :initial-label="editingCupLabel"
+        :initial-ml="editingCupMl"
+        @save="onCupSave"
+      />
+      <ConfirmSheet
+        v-model:open="deleteConfirmOpen"
+        title="Excluir copo?"
+        :message="`Remover ${deletingCupLabel} dos atalhos?`"
+        confirm-label="Excluir"
+        @confirm="confirmDeleteCup"
+      />
     </section>
 
     <section v-if="show('dados')" class="mt-7">
@@ -746,4 +795,12 @@ async function onImportFile(event: Event) {
       </div>
     </section>
   </main>
+
+  <ConfirmSheet
+    v-model:open="accountDeleteOpen"
+    title="Excluir conta?"
+    message="Apaga sua conta, dados na nuvem e registros neste aparelho. Esta ação não pode ser desfeita."
+    confirm-label="Excluir conta"
+    @confirm="confirmDeleteAccount"
+  />
 </template>

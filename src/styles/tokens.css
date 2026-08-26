@@ -39,6 +39,9 @@
   --wn-bg-b: oklch(0.93 0.03 185);
   --wn-theme: #0d7377;
   --wn-status-bar: #eef3f4;
+  --wn-glass-bg: oklch(0.96 0.012 210 / 0.68);
+  --wn-glass-border: oklch(0.88 0.02 210 / 0.42);
+  --wn-glass-blur: 24px;
 }
 
 html.dark {
@@ -60,6 +63,8 @@ html.dark {
   --wn-bg-b: oklch(0.22 0.035 230);
   --wn-theme: #1a9ea3;
   --wn-status-bar: #1e2529;
+  --wn-glass-bg: oklch(0.2 0.022 220 / 0.76);
+  --wn-glass-border: oklch(0.38 0.03 220 / 0.48);
   color-scheme: dark;
 }
 
@@ -81,10 +86,11 @@ html.dark {
     min-height: 100dvh;
     font-family: var(--font-sans);
     color: var(--color-ink);
-    background:
-      radial-gradient(120% 80% at 50% -10%, var(--wn-bg-a), transparent 55%),
-      radial-gradient(80% 50% at 100% 100%, var(--wn-bg-b), transparent 50%),
-      var(--color-mist);
+    background-color: var(--color-mist);
+    background-image:
+      radial-gradient(120% 70% at 50% 0%, var(--wn-bg-a), transparent 50%),
+      radial-gradient(80% 50% at 100% 100%, var(--wn-bg-b), transparent 50%);
+    background-attachment: fixed;
     -webkit-font-smoothing: antialiased;
     overscroll-behavior: none;
     touch-action: manipulation;
@@ -93,6 +99,7 @@ html.dark {
   #app {
     min-height: 100dvh;
     touch-action: manipulation;
+    background-color: var(--color-mist);
   }
 
   button,
@@ -118,22 +125,49 @@ html.dark {
 }
 
 @utility safe-pt {
-  padding-top: max(0.75rem, env(safe-area-inset-top));
-}
-
-@utility app-bar {
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  margin-left: -1.25rem;
-  margin-right: -1.25rem;
-  padding-left: 1.25rem;
-  padding-right: 1.25rem;
-  padding-top: max(0.75rem, env(safe-area-inset-top));
-  padding-bottom: 0.5rem;
-  background-color: var(--wn-mist);
+  padding-top: env(safe-area-inset-top, 0px);
 }
 
 @utility font-display {
   font-family: var(--font-display);
+}
+
+@layer components {
+  .app-bar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    margin-left: -1.25rem;
+    margin-right: -1.25rem;
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+    padding-top: calc(0.75rem + env(safe-area-inset-top, 0px));
+    padding-bottom: 0.5rem;
+    background: transparent;
+    isolation: isolate;
+  }
+
+  .app-bar::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: var(--wn-glass-bg);
+    -webkit-backdrop-filter: blur(var(--wn-glass-blur)) saturate(1.85);
+    backdrop-filter: blur(var(--wn-glass-blur)) saturate(1.85);
+    border-bottom: 1px solid var(--wn-glass-border);
+    box-shadow: 0 1px 0 oklch(1 0 0 / 0.06) inset;
+  }
+
+  @supports not (backdrop-filter: blur(1px)) {
+    .app-bar::before {
+      background: var(--wn-mist);
+      border-bottom-color: var(--wn-line);
+    }
+  }
+
+  .app-bar > * {
+    position: relative;
+    z-index: 1;
+  }
 }

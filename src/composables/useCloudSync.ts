@@ -68,6 +68,11 @@ export async function logoutRemote() {
   clearAuthCache()
 }
 
+export async function deleteAccountRemote() {
+  await api('/api/auth/account', { method: 'DELETE' })
+  clearAuthCache()
+}
+
 export function startGoogleLogin() {
   window.location.href = '/api/auth/google'
 }
