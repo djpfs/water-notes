@@ -2,15 +2,24 @@
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import AvatarPicker from '@/components/AvatarPicker.vue'
+import {
+  disableNotifications,
+  enableNotifications,
+  setNotificationInterval,
+} from '@/composables/useNotifications'
 import { useAppStore } from '@/stores/app'
+import { NOTIFICATION_INTERVALS, type ThemeMode } from '@/types'
 import { formatVolume } from '@/utils/date'
 
 const router = useRouter()
 const store = useAppStore()
 
+
 const nickname = ref(store.profile.nickname)
 const weightKg = ref(String(store.profile.weightKg))
 const avatarId = ref(store.profile.avatarId)
+const notifError = ref('')
+const notifBusy = ref(false)
 
 const newLabel = ref('')
 const newMl = ref('250')
@@ -29,6 +38,12 @@ const profileValid = computed(
     weightNumber.value >= 20 &&
     weightNumber.value <= 300,
 )
+
+const themes: { id: ThemeMode; label: string }[] = [
+  { id: 'system', label: 'Sistema' },
+  { id: 'light', label: 'Claro' },
+  { id: 'dark', label: 'Escuro' },
+]
 
 function saveProfile() {
   if (!profileValid.value) return
@@ -64,6 +79,27 @@ function saveEdit() {
 function cancelEdit() {
   editingId.value = null
 }
+
+async function toggleNotifications() {
+  notifError.value = ''
+  notifBusy.value = true
+  try {
+    if (store.notifications.enabled) {
+      await disableNotifications()
+    } else {
+      await enableNotifications()
+    }
+  } catch (err) {
+    notifError.value = err instanceof Error ? err.message : 'Não foi possível ativar.'
+  } finally {
+    notifBusy.value = false
+  }
+}
+
+async function onIntervalChange(event: Event) {
+  const value = Number((event.target as HTMLSelectElement).value)
+  await setNotificationInterval(value)
+}
 </script>
 
 <template>
@@ -89,6 +125,69 @@ function cancelEdit() {
     </header>
 
     <section class="mt-6">
+      <h2 class="text-sm font-semibold uppercase tracking-wide text-ink-soft">Aparência</h2>
+      <div class="mt-3 flex gap-2">
+        <button
+          v-for="item in themes"
+          :key="item.id"
+          type="button"
+          class="h-11 flex-1 rounded-xl text-sm font-semibold transition"
+          :class="
+            store.theme === item.id
+              ? 'bg-teal text-surface-raised'
+              : 'bg-mist-deep text-ink-soft'
+          "
+          @click="store.setTheme(item.id)"
+        >
+          {{ item.label }}
+        </button>
+      </div>
+    </section>
+
+    <section class="mt-8">
+      <h2 class="text-sm font-semibold uppercase tracking-wide text-ink-soft">
+        Lembretes
+      </h2>
+      <p class="mt-1 text-sm text-ink-soft">
+        Notificações periódicas para lembrar de beber água. Funcionam melhor com o
+        app instalado.
+      </p>
+
+      <button
+        type="button"
+        class="mt-3 h-12 w-full rounded-2xl font-semibold transition disabled:opacity-50"
+        :class="
+          store.notifications.enabled
+            ? 'bg-teal text-surface-raised'
+            : 'bg-mist-deep text-ink'
+        "
+        :disabled="notifBusy"
+        @click="toggleNotifications"
+      >
+        {{ store.notifications.enabled ? 'Lembretes ativos' : 'Ativar lembretes' }}
+      </button>
+
+      <label v-if="store.notifications.enabled" class="mt-3 block">
+        <span class="mb-1.5 block text-sm text-ink-soft">Intervalo</span>
+        <select
+          class="h-12 w-full rounded-2xl bg-surface px-4 text-ink outline-none ring-1 ring-line focus:ring-2 focus:ring-teal"
+          :value="store.notifications.intervalMinutes"
+          @change="onIntervalChange"
+        >
+          <option
+            v-for="item in NOTIFICATION_INTERVALS"
+            :key="item.minutes"
+            :value="item.minutes"
+          >
+            A cada {{ item.label }}
+          </option>
+        </select>
+      </label>
+
+      <p v-if="notifError" class="mt-2 text-sm text-amber-deep">{{ notifError }}</p>
+    </section>
+
+    <section class="mt-8">
       <h2 class="text-sm font-semibold uppercase tracking-wide text-ink-soft">Perfil</h2>
 
       <label class="mt-3 block">

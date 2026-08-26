@@ -29,27 +29,30 @@ const pctLabel = computed(() => Math.round(fillPercent.value))
         </defs>
 
         <path
+          class="vessel-body"
           d="M42 28h116c6 0 12 6 12 12v164c0 42-32 66-70 66s-70-24-70-66V40c0-6 6-12 12-12z"
-          fill="oklch(0.97 0.01 210)"
-          stroke="oklch(0.78 0.03 210)"
           stroke-width="3"
         />
 
         <g clip-path="url(#vesselClip)">
-          <rect
-            class="water-fill"
-            x="0"
-            y="0"
-            width="200"
-            height="280"
-            fill="url(#waterGrad)"
+          <g
+            class="water-lift"
             :style="{ transform: `translateY(${100 - fillPercent}%)` }"
-          />
-          <path
-            class="wave"
-            :d="`M0 ${236 - (fillPercent / 100) * 200} Q50 ${220 - (fillPercent / 100) * 200} 100 ${236 - (fillPercent / 100) * 200} T200 ${236 - (fillPercent / 100) * 200} V280 H0 Z`"
-            fill="oklch(0.82 0.07 200 / 0.45)"
-          />
+          >
+            <g class="water-bob">
+              <rect x="0" y="0" width="200" height="280" fill="url(#waterGrad)" />
+              <g class="wave-scroll">
+                <path
+                  class="wave-a"
+                  d="M0 8 Q25 -8 50 8 T100 8 T150 8 T200 8 T250 8 T300 8 T350 8 T400 8 V280 H0 Z"
+                />
+                <path
+                  class="wave-b"
+                  d="M0 16 Q25 2 50 16 T100 16 T150 16 T200 16 T250 16 T300 16 T350 16 T400 16 V280 H0 Z"
+                />
+              </g>
+            </g>
+          </g>
         </g>
 
         <path
@@ -75,19 +78,56 @@ const pctLabel = computed(() => Math.round(fillPercent.value))
 </template>
 
 <style scoped>
-.water-fill {
+.vessel-body {
+  fill: var(--wn-surface-raised);
+  stroke: var(--wn-line);
+}
+
+.water-lift {
   transform-origin: center bottom;
   transition: transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.wave {
-  transition: d 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+.wave-a {
+  fill: oklch(0.82 0.07 200 / 0.5);
+}
+
+.wave-b {
+  fill: oklch(0.88 0.05 200 / 0.35);
+}
+
+.wave-scroll {
+  animation: wave-drift 4.5s linear infinite;
+}
+
+.water-bob {
+  animation: water-bob 3.2s ease-in-out infinite;
+  transform-origin: center top;
+}
+
+@keyframes wave-drift {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-200px);
+  }
+}
+
+@keyframes water-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .water-fill,
-  .wave {
-    transition: none;
+  .wave-scroll,
+  .water-bob {
+    animation: none;
   }
 }
 </style>

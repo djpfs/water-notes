@@ -4,7 +4,9 @@ import {
   DEFAULT_CUPS,
   ML_PER_KG,
   type Cup,
+  type NotificationSettings,
   type Profile,
+  type ThemeMode,
   type WaterEntry,
 } from '@/types'
 import { localDateKey } from '@/utils/date'
@@ -24,6 +26,12 @@ export const useAppStore = defineStore(
     const cups = ref<Cup[]>([...DEFAULT_CUPS])
     const entries = ref<WaterEntry[]>([])
     const celebratedDate = ref<string | null>(null)
+    const theme = ref<ThemeMode>('system')
+    const notifications = ref<NotificationSettings>({
+      enabled: false,
+      intervalMinutes: 60,
+    })
+    const installDismissedAt = ref<string | null>(null)
 
     const dailyGoalMl = computed(() =>
       Math.round(Math.max(0, profile.value.weightKg) * ML_PER_KG),
@@ -119,11 +127,30 @@ export const useAppStore = defineStore(
       return goalReached.value && celebratedDate.value !== localDateKey()
     }
 
+    function setTheme(mode: ThemeMode) {
+      theme.value = mode
+    }
+
+    function setNotifications(partial: Partial<NotificationSettings>) {
+      notifications.value = { ...notifications.value, ...partial }
+    }
+
+    function dismissInstall() {
+      installDismissedAt.value = new Date().toISOString()
+    }
+
+    function clearInstallDismiss() {
+      installDismissedAt.value = null
+    }
+
     return {
       profile,
       cups,
       entries,
       celebratedDate,
+      theme,
+      notifications,
+      installDismissedAt,
       dailyGoalMl,
       todayEntries,
       todayConsumedMl,
@@ -139,6 +166,10 @@ export const useAppStore = defineStore(
       removeCup,
       markCelebratedToday,
       shouldCelebrate,
+      setTheme,
+      setNotifications,
+      dismissInstall,
+      clearInstallDismiss,
     }
   },
   {
