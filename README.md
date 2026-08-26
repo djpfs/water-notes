@@ -12,11 +12,12 @@ npm run build
 
 ## Cloudflare Pages
 
-1. [Dashboard](https://dash.cloudflare.com) → **Workers & Pages** → projeto
-2. **Settings** → **Builds & deployments** (ou Build configuration):
-   - **Build command:** `npm run build`
-   - **Build output directory:** `dist`
-   - **Deploy command:** deixe **vazio** (não use `wrangler deploy`)
-3. Salve e faça **Retry deployment**
+Build settings:
 
-URL típica: `https://water-notes.pages.dev`
+| Campo | Valor |
+|-------|--------|
+| Build command | `npm run build` |
+| Build output directory | `dist` |
+| Deploy command | `npx wrangler pages deploy dist --project-name=water-notes` |
+
+Não use `wrangler deploy` (isso é Worker). Use `wrangler pages deploy`.
