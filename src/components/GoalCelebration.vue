@@ -46,7 +46,7 @@ onUnmounted(() => {
     <Transition name="celebrate">
       <div
         v-if="open"
-        class="fixed inset-0 z-[60] flex items-center justify-center overflow-hidden bg-teal-deep/88 px-6"
+        class="sheet-scrim fixed inset-0 z-[60] flex items-center justify-center overflow-hidden bg-teal-deep/88 px-6"
         role="dialog"
         aria-modal="true"
         aria-labelledby="celebrate-title"

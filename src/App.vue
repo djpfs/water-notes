@@ -4,6 +4,7 @@ import InstallPromptSheet from '@/components/InstallPromptSheet.vue'
 import UndoToast from '@/components/UndoToast.vue'
 import UpdateBanner from '@/components/UpdateBanner.vue'
 import { useAutoSync } from '@/composables/useAutoSync'
+import { useSyncPush } from '@/composables/useSyncPush'
 import { useNotifications } from '@/composables/useNotifications'
 import { useTapFeedback } from '@/composables/useTapFeedback'
 import { useTheme } from '@/composables/useTheme'
@@ -13,6 +14,7 @@ useTheme()
 useNotifications()
 useTapFeedback()
 useAutoSync()
+useSyncPush()
 
 const { message, actionLabel, onAction, clear } = useToast()
 </script>

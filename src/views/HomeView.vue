@@ -53,7 +53,7 @@ const { pullDistance, refreshing, threshold, bind } = usePullToRefresh(
       checkForUpdate().catch(() => false),
       (async () => {
         const user = await fetchMe()
-        if (!user) return null
+        if (!user) return 'skipped' as const
         try {
           return await pullAndMerge()
         } catch {
@@ -70,6 +70,7 @@ const { pullDistance, refreshing, threshold, bind } = usePullToRefresh(
     else if (syncResult === 'merged') parts.push(i18n.global.t('toast.dataSynced'))
     else if (syncResult === 'empty') parts.push(i18n.global.t('toast.dataUploaded'))
     else if (syncResult === 'error') parts.push(i18n.global.t('toast.syncFailed'))
+    else if (syncResult === 'skipped') parts.push(i18n.global.t('toast.loginRequiredSync'))
 
     showToast(parts.length ? parts.join(' · ') : i18n.global.t('toast.allUpdated'))
   },
@@ -212,7 +213,7 @@ function onVisibility() {
 </script>
 
 <template>
-  <main ref="mainRef" class="safe-pb flex min-h-dvh flex-col px-5 pb-6">
+  <main ref="mainRef" class="safe-pb flex min-h-dvh overscroll-y-contain flex-col px-5 pb-6">
     <header class="app-bar flex items-center justify-between gap-2">
       <button
         type="button"
@@ -356,7 +357,7 @@ function onVisibility() {
     </header>
 
     <div
-      class="flex items-center justify-center overflow-hidden text-sm text-ink-soft transition-[height] duration-200"
+      class="flex select-none items-center justify-center overflow-hidden text-sm text-ink-soft transition-[height] duration-200"
       :style="{ height: pullDistance > 0 || refreshing ? `${Math.max(pullDistance, refreshing ? threshold : 0)}px` : '0px' }"
       aria-live="polite"
     >

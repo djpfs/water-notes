@@ -28,6 +28,10 @@ let cachedUser: AuthUser | null | undefined
 let cachedAt = 0
 const CACHE_MS = 30_000
 
+let pushTimer: ReturnType<typeof setTimeout> | undefined
+let pullInProgress = false
+const PUSH_DEBOUNCE_MS = 500
+
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     credentials: 'include',
@@ -100,15 +104,15 @@ function snapshotFromStore(): SyncData {
 
 function mergeEntries(local: WaterEntry[], remote: WaterEntry[]): WaterEntry[] {
   const map = new Map<string, WaterEntry>()
-  for (const e of remote) map.set(e.id, e)
   for (const e of local) map.set(e.id, e)
+  for (const e of remote) map.set(e.id, e)
   return [...map.values()]
 }
 
 function mergeCups(local: Cup[], remote: Cup[]): Cup[] {
   const map = new Map<string, Cup>()
-  for (const c of remote) map.set(c.id, c)
   for (const c of local) map.set(c.id, c)
+  for (const c of remote) map.set(c.id, c)
   return [...map.values()]
 }
 
@@ -116,10 +120,48 @@ function mergeSnapshots(
   local: Record<string, number>,
   remote: Record<string, number>,
 ): Record<string, number> {
-  return { ...remote, ...local }
+  return { ...local, ...remote }
+}
+
+export function scheduleCloudPush() {
+  if (pullInProgress) return
+  clearTimeout(pushTimer)
+  pushTimer = setTimeout(() => {
+    void flushCloudPush()
+  }, PUSH_DEBOUNCE_MS)
+}
+
+export async function flushCloudPush(): Promise<void> {
+  clearTimeout(pushTimer)
+  pushTimer = undefined
+  if (pullInProgress) return
+  try {
+    const user = await fetchMe()
+    if (user) await pushLocal()
+  } catch {
+    /* offline or session expired */
+  }
 }
 
 export async function pullAndMerge(): Promise<'empty' | 'merged' | 'pulled'> {
+  clearTimeout(pushTimer)
+  pushTimer = undefined
+  try {
+    const user = await fetchMe()
+    if (user) await pushLocal()
+  } catch {
+    /* push before pull is best-effort */
+  }
+
+  pullInProgress = true
+  try {
+    return await pullAndMergeInner()
+  } finally {
+    pullInProgress = false
+  }
+}
+
+async function pullAndMergeInner(): Promise<'empty' | 'merged' | 'pulled'> {
   const store = useAppStore()
   const remote = await api<{
     data: SyncData | null

@@ -40,6 +40,7 @@ export default {
     dataSynced: 'Dados sincronizados',
     dataUploaded: 'Dados enviados à nuvem',
     syncFailed: 'Falha ao sincronizar',
+    loginRequiredSync: 'Entre na conta para sincronizar',
     allUpdated: 'Tudo atualizado',
     entryRemoved: 'Lançamento removido',
     undo: 'Desfazer',
@@ -57,7 +58,6 @@ export default {
     feedback: 'Feedback',
     cups: 'Copos',
     data: 'Dados',
-    health: 'Saúde',
     language: 'Idioma',
     about: 'Sobre',
     syncNow: 'Sincronizar agora',
@@ -104,15 +104,6 @@ export default {
     importBackup: 'Importar backup',
     backupExported: 'Backup exportado.',
     backupImported: 'Backup importado.',
-    exportHealthCsv: 'Exportar CSV (saúde)',
-    exportHealthJson: 'Exportar JSON (saúde)',
-    healthExported: 'Arquivo de saúde exportado.',
-    healthHint:
-      'Apps nativos (Apple Saúde, Health Connect) não abrem direto pelo navegador. Exporte seus registros e importe no app de saúde ou use um conector compatível.',
-    healthApple:
-      'Apple Saúde: use Atalhos para registrar água automaticamente ou importe o CSV em apps parceiros.',
-    healthAndroid:
-      'Health Connect: exporte o JSON e use apps como Health Sync ou importadores compatíveis.',
     languageLabel: 'Idioma do app',
     languagePt: 'Português (Brasil)',
     languageEn: 'English',

@@ -30,7 +30,7 @@ const subtitle = computed(() =>
     <Transition name="fade">
       <div
         v-if="open && summaries.length"
-        class="fixed inset-0 z-[65] flex items-center justify-center bg-ink/50 px-5"
+        class="sheet-scrim fixed inset-0 z-[65] flex items-center justify-center bg-ink/50 px-5"
         role="dialog"
         aria-modal="true"
       >

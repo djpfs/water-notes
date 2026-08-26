@@ -40,6 +40,7 @@ export default {
     dataSynced: 'Data synced',
     dataUploaded: 'Data uploaded to cloud',
     syncFailed: 'Sync failed',
+    loginRequiredSync: 'Sign in to sync data',
     allUpdated: 'Everything up to date',
     entryRemoved: 'Entry removed',
     undo: 'Undo',
@@ -57,7 +58,6 @@ export default {
     feedback: 'Feedback',
     cups: 'Cups',
     data: 'Data',
-    health: 'Health',
     language: 'Language',
     about: 'About',
     syncNow: 'Sync now',
@@ -104,15 +104,6 @@ export default {
     importBackup: 'Import backup',
     backupExported: 'Backup exported.',
     backupImported: 'Backup imported.',
-    exportHealthCsv: 'Export CSV (health)',
-    exportHealthJson: 'Export JSON (health)',
-    healthExported: 'Health file exported.',
-    healthHint:
-      'Native apps (Apple Health, Health Connect) cannot be opened directly from the browser. Export your logs and import them in a health app or compatible connector.',
-    healthApple:
-      'Apple Health: use Shortcuts to log water automatically or import CSV in partner apps.',
-    healthAndroid:
-      'Health Connect: export JSON and use apps like Health Sync or compatible importers.',
     languageLabel: 'App language',
     languagePt: 'Português (Brasil)',
     languageEn: 'English',

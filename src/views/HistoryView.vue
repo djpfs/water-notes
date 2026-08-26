@@ -195,7 +195,6 @@ watch(todayKey, (today) => {
 }
 
 .date-input::-webkit-calendar-picker-indicator {
-  cursor: pointer;
   opacity: 0.7;
 }
 </style>

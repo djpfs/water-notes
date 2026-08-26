@@ -26,7 +26,6 @@ import { useToast } from '@/composables/useToast'
 import { useAppStore } from '@/stores/app'
 import { ML_PER_KG, NOTIFICATION_INTERVALS, APP_LOCALES, type AppLocale, type ThemeMode } from '@/types'
 import { formatVolume } from '@/utils/date'
-import { detectHealthPlatform, exportHealthData } from '@/utils/healthExport'
 import { goBackOr } from '@/utils/navigation'
 import { formatClock, parseClock } from '@/utils/timeWindow'
 import { APP_VERSION } from '@/version'
@@ -35,7 +34,6 @@ const router = useRouter()
 const store = useAppStore()
 const { t } = useI18n()
 const { show: showToast } = useToast()
-const healthPlatform = detectHealthPlatform()
 const locale = ref<AppLocale>(store.locale)
 const remotePushOk = ref(canUseRemotePush())
 
@@ -128,7 +126,6 @@ const sections = computed(() => [
   { id: 'idioma', title: t('settings.language'), keywords: 'idioma language english português locale' },
   { id: 'copos', title: t('settings.cups'), keywords: 'copos cups atalhos shortcuts' },
   { id: 'dados', title: t('settings.data'), keywords: 'dados data backup export import' },
-  { id: 'saude', title: t('settings.health'), keywords: 'saúde health apple health connect csv json' },
   { id: 'sobre', title: t('settings.about'), keywords: 'sobre about versão version' },
 ])
 
@@ -189,11 +186,6 @@ function saveFeedback() {
 function saveLocale() {
   store.setLocale(locale.value)
   showToast(t('settings.languageSaved'))
-}
-
-function exportHealth(format: 'csv' | 'json') {
-  exportHealthData(store.entries, format)
-  showToast(t('settings.healthExported'))
 }
 
 async function onTestRemotePush() {
@@ -803,37 +795,6 @@ async function onImportFile(event: Event) {
       >
         {{ t('common.save') }}
       </button>
-    </section>
-
-    <section v-if="show('saude')" class="mt-7">
-      <h2 class="mb-2 px-1 text-[13px] font-semibold uppercase tracking-wide text-ink-soft">
-        {{ t('settings.health') }}
-      </h2>
-      <div class="overflow-hidden rounded-2xl bg-surface ring-1 ring-line">
-        <p class="border-b border-line px-4 py-3 text-sm text-ink-soft">
-          {{ t('settings.healthHint') }}
-        </p>
-        <p v-if="healthPlatform === 'ios'" class="border-b border-line px-4 py-3 text-sm text-ink-soft">
-          {{ t('settings.healthApple') }}
-        </p>
-        <p v-else-if="healthPlatform === 'android'" class="border-b border-line px-4 py-3 text-sm text-ink-soft">
-          {{ t('settings.healthAndroid') }}
-        </p>
-        <button
-          type="button"
-          class="flex h-12 w-full items-center border-b border-line px-4 text-left text-sm font-medium text-ink"
-          @click="exportHealth('csv')"
-        >
-          {{ t('settings.exportHealthCsv') }}
-        </button>
-        <button
-          type="button"
-          class="flex h-12 w-full items-center px-4 text-left text-sm font-medium text-ink"
-          @click="exportHealth('json')"
-        >
-          {{ t('settings.exportHealthJson') }}
-        </button>
-      </div>
     </section>
 
     <section v-if="show('copos')" class="mt-7">

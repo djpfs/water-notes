@@ -45,7 +45,7 @@ function submit() {
     <Transition name="sheet">
       <div
         v-if="open && entry"
-        class="fixed inset-0 z-50 flex items-end justify-center bg-ink/35 sm:items-center sm:p-4"
+        class="sheet-scrim fixed inset-0 z-50 flex items-end justify-center bg-ink/35 sm:items-center sm:p-4"
         @click.self="close"
       >
         <div
