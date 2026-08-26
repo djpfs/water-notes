@@ -12,14 +12,11 @@ npm run build
 
 ## Cloudflare Pages
 
-1. Push do código para o GitHub (`djpfs/water-notes`)
-2. [Cloudflare Dashboard](https://dash.cloudflare.com) → **Workers & Pages** → **Create** → **Pages** → **Connect to Git**
-3. Repo: `water-notes`
-4. Build settings:
-   - **Framework preset:** Vite
+1. [Dashboard](https://dash.cloudflare.com) → **Workers & Pages** → projeto
+2. **Settings** → **Builds & deployments** (ou Build configuration):
    - **Build command:** `npm run build`
    - **Build output directory:** `dist`
-   - **Root directory:** `/`
-5. Deploy → URL tipo `https://water-notes.pages.dev`
+   - **Deploy command:** deixe **vazio** (não use `wrangler deploy`)
+3. Salve e faça **Retry deployment**
 
-SPA: `public/_redirects` já redireciona rotas do Vue Router para `index.html`.
+URL típica: `https://water-notes.pages.dev`
