@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import AvatarPicker from '@/components/AvatarPicker.vue'
 import { useAppStore } from '@/stores/app'
@@ -8,6 +9,7 @@ import { formatVolume } from '@/utils/date'
 
 const router = useRouter()
 const store = useAppStore()
+const { t } = useI18n()
 
 const step = ref(0)
 const nickname = ref(store.profile.nickname || '')
@@ -17,12 +19,12 @@ const useProfilePhoto = ref(store.profile.useProfilePhoto)
 const useCustomGoal = ref(false)
 const customGoal = ref('')
 
-const steps = [
-  'Como te chamamos?',
-  'Qual seu peso?',
-  'Escolha um avatar',
-  'Sua meta diária',
-]
+const steps = computed(() => [
+  t('onboarding.stepName'),
+  t('onboarding.stepWeight'),
+  t('onboarding.stepAvatar'),
+  t('onboarding.stepGoal'),
+])
 
 const weightNumber = computed(() => {
   const n = Number(String(weightKg.value).replace(',', '.'))
@@ -86,7 +88,7 @@ function back() {
     <header class="mb-6 pt-2">
       <div class="flex items-center justify-between">
         <p class="text-xs font-semibold uppercase tracking-wider text-teal">
-          Passo {{ step + 1 }} de 4
+          {{ t('onboarding.step', { current: step + 1, total: 4 }) }}
         </p>
       </div>
       <div class="mt-3 flex gap-1.5">
@@ -105,13 +107,13 @@ function back() {
     <div class="flex-1">
       <div v-if="step === 0">
         <label class="block">
-          <span class="mb-2 block text-sm font-medium text-ink-soft">Apelido</span>
+          <span class="mb-2 block text-sm font-medium text-ink-soft">{{ t('onboarding.nickname') }}</span>
           <input
             v-model="nickname"
             type="text"
             maxlength="24"
             autocomplete="nickname"
-            placeholder="Ex.: João"
+            :placeholder="t('onboarding.nicknamePlaceholder')"
             class="h-14 w-full rounded-2xl bg-surface px-4 text-lg text-ink outline-none ring-1 ring-line focus:ring-2 focus:ring-teal"
           />
         </label>
@@ -119,7 +121,7 @@ function back() {
 
       <div v-else-if="step === 1">
         <label class="block">
-          <span class="mb-2 block text-sm font-medium text-ink-soft">Peso em kg</span>
+          <span class="mb-2 block text-sm font-medium text-ink-soft">{{ t('onboarding.weight') }}</span>
           <div class="relative">
             <input
               v-model="weightKg"
@@ -136,7 +138,7 @@ function back() {
           </div>
         </label>
         <p class="mt-3 text-sm text-ink-soft">
-          Sugestão: {{ formatVolume(suggestedGoal) }} ({{ ML_PER_KG }} ml/kg).
+          {{ t('onboarding.suggested', { amount: formatVolume(suggestedGoal), ratio: ML_PER_KG }) }}
         </p>
       </div>
 
@@ -150,14 +152,15 @@ function back() {
 
       <div v-else>
         <p class="text-sm text-ink-soft">
-          Calculado: <strong class="text-ink">{{ formatVolume(suggestedGoal) }}</strong>
+          {{ t('onboarding.calculated') }}
+          <strong class="text-ink">{{ formatVolume(suggestedGoal) }}</strong>
         </p>
         <label class="mt-4 flex items-center gap-3 rounded-2xl bg-surface px-4 py-3 ring-1 ring-line">
           <input v-model="useCustomGoal" type="checkbox" class="size-5 accent-[oklch(0.48_0.10_238)]" />
-          <span class="text-sm font-medium text-ink">Definir meta manual</span>
+          <span class="text-sm font-medium text-ink">{{ t('onboarding.customGoal') }}</span>
         </label>
         <label v-if="useCustomGoal" class="mt-3 block">
-          <span class="mb-2 block text-sm font-medium text-ink-soft">Meta em ml</span>
+          <span class="mb-2 block text-sm font-medium text-ink-soft">{{ t('onboarding.customGoalLabel') }}</span>
           <input
             v-model="customGoal"
             type="number"
@@ -178,7 +181,7 @@ function back() {
         class="h-13 min-h-12 flex-1 rounded-2xl bg-mist-deep font-semibold text-ink-soft"
         @click="back"
       >
-        Voltar
+        {{ t('common.back') }}
       </button>
       <button
         type="button"
@@ -186,7 +189,7 @@ function back() {
         :disabled="!canNext"
         @click="next"
       >
-        {{ step === 3 ? 'Continuar' : 'Avançar' }}
+        {{ step === 3 ? t('onboarding.continue') : t('onboarding.next') }}
       </button>
     </div>
   </main>

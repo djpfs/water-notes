@@ -6,7 +6,7 @@ import {
   unsubscribeRemotePush,
 } from '@/composables/useRemotePush'
 import { useAppStore } from '@/stores/app'
-import type { NotificationSettings } from '@/types'
+import type { AppLocale, NotificationSettings } from '@/types'
 
 export type ReminderPayload = {
   type: 'SET_REMINDERS'
@@ -20,6 +20,7 @@ export type ReminderPayload = {
   | 'windowEndMinute'
   | 'pauseWhenGoalReached'
 > & {
+  locale: AppLocale
   nickname: string
   remainingMl: number
   goalReached: boolean
@@ -30,6 +31,7 @@ const PERIODIC_MIN_MS = 12 * 60 * 60 * 1000
 
 function buildPayload(store: ReturnType<typeof useAppStore>): ReminderPayload {
   const n = store.notifications
+  const fallbackNickname = store.locale === 'en' ? 'there' : 'você'
   return {
     type: 'SET_REMINDERS',
     enabled: n.enabled,
@@ -39,7 +41,8 @@ function buildPayload(store: ReturnType<typeof useAppStore>): ReminderPayload {
     windowEndHour: n.windowEndHour,
     windowEndMinute: n.windowEndMinute,
     pauseWhenGoalReached: n.pauseWhenGoalReached,
-    nickname: store.profile.nickname || 'você',
+    locale: store.locale,
+    nickname: store.profile.nickname || fallbackNickname,
     remainingMl: store.remainingMl,
     goalReached: store.goalReached,
   }
@@ -152,6 +155,7 @@ function onSwMessage(event: MessageEvent) {
     windowEndHour: payload.windowEndHour,
     windowEndMinute: payload.windowEndMinute,
     pauseWhenGoalReached: payload.pauseWhenGoalReached,
+    locale: payload.locale,
     nickname: payload.nickname,
     remainingMl: payload.remainingMl,
     goalReached: payload.goalReached,
@@ -189,6 +193,7 @@ export function useNotifications() {
       store.remainingMl,
       store.goalReached,
       store.profile.nickname,
+      store.locale,
     ],
     () => {
       void syncReminders()

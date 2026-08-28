@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { fetchMe } from '@/composables/useCloudSync'
 import { useAppStore } from '@/stores/app'
 
 const router = useRouter()
 const store = useAppStore()
+const { t } = useI18n()
 
 onMounted(() => {
   window.setTimeout(async () => {
@@ -43,7 +45,7 @@ onMounted(() => {
         </svg>
       </div>
       <h1 class="font-display text-3xl font-bold tracking-tight text-ink">Water Notes</h1>
-      <p class="mt-2 text-sm text-ink-soft">Sua meta de água, no bolso.</p>
+      <p class="mt-2 text-sm text-ink-soft">{{ t('splash.tagline') }}</p>
     </div>
   </main>
 </template>

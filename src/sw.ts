@@ -10,6 +10,7 @@ precacheAndRoute(self.__WB_MANIFEST)
 type ReminderConfig = {
   enabled: boolean
   intervalMinutes: number
+  locale: 'pt-BR' | 'en'
   nickname: string
   remainingMl: number
   goalReached: boolean
@@ -23,6 +24,7 @@ type ReminderConfig = {
 let config: ReminderConfig = {
   enabled: false,
   intervalMinutes: 60,
+  locale: 'pt-BR',
   nickname: 'você',
   remainingMl: 0,
   goalReached: false,
@@ -36,6 +38,29 @@ let config: ReminderConfig = {
 let timer: ReturnType<typeof setTimeout> | undefined
 
 const PERIODIC_TAG = 'water-reminder'
+
+function reminderCopy(locale: 'pt-BR' | 'en', nickname: string, remainingMl: number) {
+  if (locale === 'en') {
+    return {
+      title: 'Time to drink water',
+      body:
+        remainingMl > 0
+          ? `${nickname}, ${remainingMl} ml left to hit your goal.`
+          : `${nickname}, how about logging a sip?`,
+      testTitle: 'Water Notes Test',
+      testBody: 'If you saw this, notifications are working.',
+    }
+  }
+  return {
+    title: 'Hora de beber água',
+    body:
+      remainingMl > 0
+        ? `${nickname}, faltam ${remainingMl} ml para a meta.`
+        : `${nickname}, que tal registrar um gole?`,
+    testTitle: 'Teste Water Notes',
+    testBody: 'Se você viu isso, as notificações estão ok.',
+  }
+}
 
 function minutesOfDay(date = new Date()): number {
   return date.getHours() * 60 + date.getMinutes()
@@ -68,6 +93,7 @@ function applyReminderPatch(data: Partial<ReminderConfig>) {
   config = {
     enabled: data.enabled ?? config.enabled,
     intervalMinutes: Number(data.intervalMinutes) || config.intervalMinutes,
+    locale: data.locale === 'en' ? 'en' : config.locale,
     nickname: data.nickname || config.nickname,
     remainingMl: Number(data.remainingMl ?? config.remainingMl),
     goalReached: data.goalReached ?? config.goalReached,
@@ -111,13 +137,10 @@ async function showReminder() {
   await refreshConfigFromClients()
   if (!shouldNotify()) return
 
-  const remaining =
-    config.remainingMl > 0
-      ? `Faltam ${config.remainingMl} ml para a meta.`
-      : 'Que tal registrar um gole?'
+  const copy = reminderCopy(config.locale, config.nickname, config.remainingMl)
 
-  await self.registration.showNotification('Hora de beber água', {
-    body: `${config.nickname}, ${remaining}`,
+  await self.registration.showNotification(copy.title, {
+    body: copy.body,
     icon: '/icons/icon-192.png',
     badge: '/icons/icon-192.png',
     tag: 'water-reminder',
@@ -157,9 +180,10 @@ self.addEventListener('message', (event: ExtendableMessageEvent) => {
   }
 
   if (data?.type === 'TEST_REMINDER') {
+    const copy = reminderCopy(config.locale, config.nickname, config.remainingMl)
     event.waitUntil(
-      self.registration.showNotification('Teste Water Notes', {
-        body: 'Se você viu isso, as notificações estão ok.',
+      self.registration.showNotification(copy.testTitle, {
+        body: copy.testBody,
         icon: '/icons/icon-192.png',
         badge: '/icons/icon-192.png',
         tag: 'water-reminder-test',

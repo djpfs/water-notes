@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import ProfileAvatar from '@/components/ProfileAvatar.vue'
 import ConfirmSheet from '@/components/ConfirmSheet.vue'
@@ -13,7 +14,6 @@ import UserProfileModal from '@/components/UserProfileModal.vue'
 import { useToast } from '@/composables/useToast'
 import WaterVessel from '@/components/WaterVessel.vue'
 import { fetchMe, pullAndMerge } from '@/composables/useCloudSync'
-import { i18n } from '@/i18n'
 import { usePwaUpdate } from '@/composables/usePwaUpdate'
 import { usePullToRefresh } from '@/composables/usePullToRefresh'
 import { useAppStore } from '@/stores/app'
@@ -25,6 +25,7 @@ import { canShare, shareDailyProgress } from '@/utils/share'
 const router = useRouter()
 const route = useRoute()
 const store = useAppStore()
+const { t } = useI18n()
 
 const sheetOpen = ref(false)
 const celebrateOpen = ref(false)
@@ -40,9 +41,9 @@ const { show: showToast } = useToast()
 const shareSupported = canShare()
 const { checkForUpdate, needRefresh } = usePwaUpdate()
 const themeLabel = computed(() => {
-  if (store.theme === 'dark') return 'Tema escuro'
-  if (store.theme === 'light') return 'Tema claro'
-  return 'Tema do sistema'
+  if (store.theme === 'dark') return t('home.themeDark')
+  if (store.theme === 'light') return t('home.themeLight')
+  return t('home.themeSystem')
 })
 let dayCheckTimer: ReturnType<typeof setInterval> | undefined
 
@@ -65,21 +66,21 @@ const { pullDistance, refreshing, threshold, bind } = usePullToRefresh(
     const appNeedsUpdate = hasUpdate || needRefresh.value
     const parts: string[] = []
 
-    if (appNeedsUpdate) parts.push(i18n.global.t('toast.appUpdate'))
-    if (syncResult === 'pulled') parts.push(i18n.global.t('toast.dataRestored'))
-    else if (syncResult === 'merged') parts.push(i18n.global.t('toast.dataSynced'))
-    else if (syncResult === 'empty') parts.push(i18n.global.t('toast.dataUploaded'))
-    else if (syncResult === 'error') parts.push(i18n.global.t('toast.syncFailed'))
-    else if (syncResult === 'skipped') parts.push(i18n.global.t('toast.loginRequiredSync'))
+    if (appNeedsUpdate) parts.push(t('toast.appUpdate'))
+    if (syncResult === 'pulled') parts.push(t('toast.dataRestored'))
+    else if (syncResult === 'merged') parts.push(t('toast.dataSynced'))
+    else if (syncResult === 'empty') parts.push(t('toast.dataUploaded'))
+    else if (syncResult === 'error') parts.push(t('toast.syncFailed'))
+    else if (syncResult === 'skipped') parts.push(t('toast.loginRequiredSync'))
 
-    showToast(parts.length ? parts.join(' · ') : i18n.global.t('toast.allUpdated'))
+    showToast(parts.length ? parts.join(' · ') : t('toast.allUpdated'))
   },
 )
 
 const pullHint = computed(() => {
-  if (refreshing.value) return i18n.global.t('home.pullUpdating')
-  if (pullDistance.value >= threshold) return i18n.global.t('home.pullRelease')
-  return i18n.global.t('home.pullRefresh')
+  if (refreshing.value) return t('home.pullUpdating')
+  if (pullDistance.value >= threshold) return t('home.pullRelease')
+  return t('home.pullRefresh')
 })
 
 watch(
@@ -123,9 +124,9 @@ function confirmRemove() {
   pendingDeleteId.value = null
   if (!removed) return
   undoEntry.value = removed
-  showToast('Lançamento removido', {
+  showToast(t('toast.entryRemoved'), {
     action: {
-      label: 'Desfazer',
+      label: t('toast.undo'),
       onClick: () => {
         if (undoEntry.value) {
           store.restoreEntry(undoEntry.value)
@@ -170,10 +171,10 @@ async function onShare() {
     const mode = await shareDailyProgress()
     showToast(
       mode === 'shared'
-        ? 'Imagem compartilhada'
+        ? t('toast.shared')
         : mode === 'downloaded'
-          ? 'Imagem salva — compartilhe no Instagram'
-          : 'Copiado',
+          ? t('toast.downloaded')
+          : t('toast.copied'),
     )
   } catch {
     /* usuário cancelou */
@@ -218,7 +219,7 @@ function onVisibility() {
       <button
         type="button"
         class="flex min-w-0 items-center gap-3 rounded-xl text-left active:opacity-80"
-        aria-label="Ver perfil"
+        :aria-label="t('home.profile')"
         @click="profileOpen = true"
       >
         <ProfileAvatar
@@ -228,7 +229,7 @@ function onVisibility() {
           :size="44"
         />
         <div class="min-w-0">
-          <p class="text-xs font-medium text-ink-soft">Olá,</p>
+          <p class="text-xs font-medium text-ink-soft">{{ t('home.greeting') }}</p>
           <p class="truncate font-display text-lg font-bold leading-tight text-ink">
             {{ store.profile.nickname }}
           </p>
@@ -296,7 +297,7 @@ function onVisibility() {
           v-if="shareSupported"
           type="button"
           class="flex h-10 w-10 items-center justify-center rounded-xl text-ink-soft"
-          aria-label="Compartilhar"
+          :aria-label="t('nav.share')"
           @click="onShare"
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -312,7 +313,7 @@ function onVisibility() {
         <button
           type="button"
           class="flex h-10 w-10 items-center justify-center rounded-xl text-ink-soft"
-          aria-label="Histórico"
+          :aria-label="t('home.history')"
           @click="router.push({ name: 'history' })"
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -335,7 +336,7 @@ function onVisibility() {
         <button
           type="button"
           class="flex h-10 w-10 items-center justify-center rounded-xl text-ink-soft"
-          aria-label="Ajustes"
+          :aria-label="t('home.settings')"
           @click="router.push({ name: 'settings' })"
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -387,7 +388,9 @@ function onVisibility() {
       v-if="store.streak > 0"
       class="mt-3 rounded-2xl bg-teal/10 px-4 py-2 text-center text-sm font-semibold text-teal-deep"
     >
-      Sequência: {{ store.streak }} dia{{ store.streak === 1 ? '' : 's' }}
+      {{ t('home.streakLabel') }}
+      {{ store.streak }}
+      {{ store.streak === 1 ? t('home.streakDay') : t('home.streakDays') }}
     </div>
 
     <section class="mt-4">
@@ -398,13 +401,13 @@ function onVisibility() {
       />
       <p class="mt-3 text-center text-sm text-ink-soft">
         <template v-if="store.todayConsumedMl === 0">
-          Ainda sem registros hoje — um gole já conta.
+          {{ t('home.noEntries') }}
         </template>
         <template v-else-if="store.goalReached">
-          Meta atingida — pode continuar registrando.
+          {{ t('home.goalReached') }}
         </template>
         <template v-else>
-          Faltam <span class="font-semibold text-ink">{{ formatVolume(store.remainingMl) }}</span>
+          {{ t('home.remaining', { amount: formatVolume(store.remainingMl) }) }}
         </template>
       </p>
     </section>
@@ -416,14 +419,16 @@ function onVisibility() {
       <div class="flex items-center justify-between gap-3">
         <div>
           <p class="text-xs font-semibold uppercase tracking-wide text-ink-soft">
-            Próximo gole
+            {{ t('home.nextSip') }}
           </p>
           <p class="font-display text-xl font-bold text-ink tabular-nums">
             {{ formatVolume(store.suggestedSipMl) }}
           </p>
           <p class="text-xs text-ink-soft">
-            Até {{ String(store.profile.bedtimeHour).padStart(2, '0') }}:{{
-              String(store.profile.bedtimeMinute).padStart(2, '0')
+            {{
+              t('home.until', {
+                time: `${String(store.profile.bedtimeHour).padStart(2, '0')}:${String(store.profile.bedtimeMinute).padStart(2, '0')}`,
+              })
             }}
           </p>
         </div>
@@ -432,7 +437,7 @@ function onVisibility() {
           class="h-11 rounded-xl bg-teal px-4 text-sm font-semibold text-surface-raised"
           @click="onSuggested"
         >
-          Registrar
+          {{ t('home.register') }}
         </button>
       </div>
     </section>
@@ -440,14 +445,14 @@ function onVisibility() {
     <section class="mt-6">
       <div class="mb-2 flex items-center justify-between">
         <h2 class="text-sm font-semibold uppercase tracking-wide text-ink-soft">
-          Atalhos
+          {{ t('home.shortcuts') }}
         </h2>
         <button
           type="button"
           class="text-sm font-semibold text-teal"
           @click="sheetOpen = true"
         >
-          Outro valor
+          {{ t('home.otherAmount') }}
         </button>
       </div>
       <CupShortcutBar :cups="store.cups" @select="onCup" />
@@ -480,9 +485,9 @@ function onVisibility() {
     />
     <ConfirmSheet
       v-model:open="deleteConfirmOpen"
-      title="Excluir lançamento?"
-      message="Este registro será removido do dia."
-      confirm-label="Excluir"
+      :title="t('home.deleteEntryTitle')"
+      :message="t('home.deleteEntryMessage')"
+      :confirm-label="t('home.deleteEntryConfirm')"
       @confirm="confirmRemove"
     />
   </main>

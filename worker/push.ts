@@ -18,6 +18,66 @@ type PushRow = {
   last_sent_at: string | null
 }
 
+const MAX_ENDPOINT_LENGTH = 2048
+const MIN_TZ_OFFSET = -14 * 60
+const MAX_TZ_OFFSET = 14 * 60
+
+export function isValidPushEndpoint(endpoint: unknown): endpoint is string {
+  if (typeof endpoint !== 'string') return false
+  const value = endpoint.trim()
+  if (!value || value.length > MAX_ENDPOINT_LENGTH) return false
+  try {
+    const parsed = new URL(value)
+    return parsed.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
+export function isValidPushKey(key: unknown): key is string {
+  if (typeof key !== 'string') return false
+  if (!key.trim() || key.length > 1024) return false
+  return /^[A-Za-z0-9\-_]+$/.test(key)
+}
+
+export function normalizeTzOffset(value: unknown): number | null {
+  if (value === undefined || value === null) return 0
+  if (!Number.isInteger(value)) return null
+  if (value < MIN_TZ_OFFSET || value > MAX_TZ_OFFSET) return null
+  return value
+}
+
+export function localeFromValue(value: unknown): 'pt-BR' | 'en' {
+  return value === 'en' ? 'en' : 'pt-BR'
+}
+
+export function reminderCopy(
+  locale: 'pt-BR' | 'en',
+  nickname: string,
+  remaining: number,
+) {
+  if (locale === 'en') {
+    return {
+      title: 'Time to drink water',
+      body:
+        remaining > 0
+          ? `${nickname}, ${remaining} ml left to hit your goal.`
+          : `${nickname}, how about logging a sip?`,
+      testTitle: 'Water Notes Test',
+      testBody: 'Remote push is working.',
+    }
+  }
+  return {
+    title: 'Hora de beber água',
+    body:
+      remaining > 0
+        ? `${nickname}, faltam ${remaining} ml para a meta.`
+        : `${nickname}, que tal registrar um gole?`,
+    testTitle: 'Teste Water Notes',
+    testBody: 'Push remoto funcionando.',
+  }
+}
+
 function configureVapid(env: Env) {
   if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY) {
     throw new Error('VAPID não configurado')
@@ -45,7 +105,17 @@ export async function subscribePush(c: Context<AppEnv>) {
     tzOffsetMinutes?: number
   }>(c.req.raw)
 
-  if (!body?.endpoint || !body.keys?.p256dh || !body.keys?.auth) {
+  const endpoint = body?.endpoint?.trim()
+  const p256dh = body?.keys?.p256dh?.trim()
+  const auth = body?.keys?.auth?.trim()
+  const tzOffsetMinutes = normalizeTzOffset(body?.tzOffsetMinutes)
+
+  if (
+    !isValidPushEndpoint(endpoint) ||
+    !isValidPushKey(p256dh) ||
+    !isValidPushKey(auth) ||
+    tzOffsetMinutes == null
+  ) {
     return badRequest('Subscription inválida')
   }
 
@@ -63,10 +133,10 @@ export async function subscribePush(c: Context<AppEnv>) {
     .bind(
       id,
       user.id,
-      body.endpoint,
-      body.keys.p256dh,
-      body.keys.auth,
-      body.tzOffsetMinutes ?? 0,
+      endpoint,
+      p256dh,
+      auth,
+      tzOffsetMinutes,
       now,
     )
     .run()
@@ -80,6 +150,9 @@ export async function unsubscribePush(c: Context<AppEnv>) {
 
   const body = await c.req.json<{ endpoint?: string }>().catch(() => null)
   if (body?.endpoint) {
+    if (!isValidPushEndpoint(body.endpoint)) {
+      return badRequest('Endpoint inválido')
+    }
     await c.env.DB.prepare(
       `DELETE FROM push_subscriptions WHERE user_id = ? AND endpoint = ?`,
     )
@@ -128,11 +201,27 @@ export async function testPush(c: Context<AppEnv>) {
   const list = rows.results ?? []
   if (!list.length) return badRequest('Nenhuma inscrição push neste aparelho')
 
+  let locale: 'pt-BR' | 'en' = 'pt-BR'
+  const syncRow = await c.env.DB.prepare(
+    `SELECT payload FROM user_data WHERE user_id = ?`,
+  )
+    .bind(user.id)
+    .first<{ payload: string }>()
+  if (syncRow?.payload) {
+    try {
+      const payload = JSON.parse(syncRow.payload) as { locale?: string }
+      locale = localeFromValue(payload.locale)
+    } catch {
+      locale = 'pt-BR'
+    }
+  }
+  const copy = reminderCopy(locale, 'Water Notes', 0)
+
   await Promise.all(
     list.map((row) =>
       sendToSubscription(c.env, row, {
-        title: 'Teste Water Notes',
-        body: 'Push remoto funcionando.',
+        title: copy.testTitle,
+        body: copy.testBody,
         url: '/ajustes',
       }),
     ),
@@ -237,17 +326,16 @@ export async function runScheduledPushReminders(env: Env) {
         if (nowUtc - last < intervalMs) continue
       }
 
+      const locale = localeFromValue((payload as { locale?: unknown }).locale)
       const profile = payload.profile as { nickname?: string }
-      const nickname = profile?.nickname?.trim() || 'você'
+      const fallbackNickname = locale === 'en' ? 'there' : 'você'
+      const nickname = profile?.nickname?.trim() || fallbackNickname
       const remaining = Math.max(0, goal - consumed)
-      const body =
-        remaining > 0
-          ? `Faltam ${remaining} ml para a meta.`
-          : 'Que tal registrar um gole?'
+      const copy = reminderCopy(locale, nickname, remaining)
 
       await sendToSubscription(env, row, {
-        title: 'Hora de beber água',
-        body: `${nickname}, ${body}`,
+        title: copy.title,
+        body: copy.body,
         url: '/inicio',
       })
 

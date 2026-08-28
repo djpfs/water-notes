@@ -31,6 +31,20 @@ const CACHE_MS = 30_000
 let pushTimer: ReturnType<typeof setTimeout> | undefined
 let pullInProgress = false
 const PUSH_DEBOUNCE_MS = 500
+let syncRevision = 0
+let conflictRecoveryInProgress = false
+
+class ApiError extends Error {
+  status: number
+  data: unknown
+
+  constructor(message: string, status: number, data: unknown) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+    this.data = data
+  }
+}
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
@@ -42,8 +56,10 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
     },
   })
   if (!res.ok) {
-    const err = (await res.json().catch(() => null)) as { error?: string } | null
-    throw new Error(err?.error || `HTTP ${res.status}`)
+    const err = (await res.json().catch(() => null)) as
+      | { error?: string; code?: string; currentRevision?: number }
+      | null
+    throw new ApiError(err?.error || `HTTP ${res.status}`, res.status, err)
   }
   return res.json() as Promise<T>
 }
@@ -51,6 +67,7 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 export function clearAuthCache() {
   cachedUser = undefined
   cachedAt = 0
+  syncRevision = 0
 }
 
 export async function fetchMe(force = false): Promise<AuthUser | null> {
@@ -123,59 +140,33 @@ function mergeSnapshots(
   return { ...local, ...remote }
 }
 
-export function scheduleCloudPush() {
-  if (pullInProgress) return
-  clearTimeout(pushTimer)
-  pushTimer = setTimeout(() => {
-    void flushCloudPush()
-  }, PUSH_DEBOUNCE_MS)
+function isRevisionConflictError(err: unknown): err is ApiError {
+  return (
+    err instanceof ApiError &&
+    err.status === 409 &&
+    (err.data as { code?: string } | null)?.code === 'REVISION_CONFLICT'
+  )
 }
 
-export async function flushCloudPush(): Promise<void> {
-  clearTimeout(pushTimer)
-  pushTimer = undefined
-  if (pullInProgress) return
-  try {
-    const user = await fetchMe()
-    if (user) await pushLocal()
-  } catch {
-    /* offline or session expired */
-  }
+type RemoteSyncResponse = {
+  data: SyncData | null
+  revision: number
+  updatedAt: string | null
 }
 
-export async function pullAndMerge(): Promise<'empty' | 'merged' | 'pulled'> {
-  clearTimeout(pushTimer)
-  pushTimer = undefined
-  try {
-    const user = await fetchMe()
-    if (user) await pushLocal()
-  } catch {
-    /* push before pull is best-effort */
-  }
-
-  pullInProgress = true
-  try {
-    return await pullAndMergeInner()
-  } finally {
-    pullInProgress = false
-  }
+async function fetchRemoteSync(): Promise<RemoteSyncResponse> {
+  const remote = await api<RemoteSyncResponse>('/api/sync')
+  syncRevision = remote.revision
+  return remote
 }
 
-async function pullAndMergeInner(): Promise<'empty' | 'merged' | 'pulled'> {
+function mergeRemoteIntoStore(remote: RemoteSyncResponse): 'empty' | 'merged' | 'pulled' {
   const store = useAppStore()
-  const remote = await api<{
-    data: SyncData | null
-    revision: number
-    updatedAt: string | null
-  }>('/api/sync')
-
   if (!remote.data) {
-    await pushLocal()
     return 'empty'
   }
 
   const localEmpty = store.entries.length === 0 && !store.profile.onboarded
-
   if (localEmpty) {
     store.importBackup({
       version: 1,
@@ -225,14 +216,101 @@ async function pullAndMergeInner(): Promise<'empty' | 'merged' | 'pulled'> {
     ),
   })
 
-  await pushLocal()
   return 'merged'
 }
 
-export async function pushLocal() {
+export function scheduleCloudPush() {
+  if (pullInProgress) return
+  clearTimeout(pushTimer)
+  pushTimer = setTimeout(() => {
+    void flushCloudPush()
+  }, PUSH_DEBOUNCE_MS)
+}
+
+export async function flushCloudPush(): Promise<void> {
+  clearTimeout(pushTimer)
+  pushTimer = undefined
+  if (pullInProgress) return
+  try {
+    const user = await fetchMe()
+    if (user) await pushLocal()
+  } catch {
+    /* offline or session expired */
+  }
+}
+
+export async function pullAndMerge(): Promise<'empty' | 'merged' | 'pulled'> {
+  clearTimeout(pushTimer)
+  pushTimer = undefined
+  try {
+    const user = await fetchMe()
+    if (user) await pushLocalRaw()
+  } catch {
+    /* push before pull is best-effort */
+  }
+
+  pullInProgress = true
+  try {
+    return await pullAndMergeInner()
+  } finally {
+    pullInProgress = false
+  }
+}
+
+async function pullAndMergeInner(): Promise<'empty' | 'merged' | 'pulled'> {
+  const remote = await fetchRemoteSync()
+  const mergeResult = mergeRemoteIntoStore(remote)
+  if (mergeResult === 'empty') {
+    await pushLocalRaw()
+    return 'empty'
+  }
+  if (mergeResult === 'pulled') {
+    return 'pulled'
+  }
+
+  await pushLocalRaw()
+  return 'merged'
+}
+
+async function recoverFromConflict() {
+  const remote = await fetchRemoteSync()
+  if (remote.data) {
+    mergeRemoteIntoStore(remote)
+  }
+}
+
+async function pushLocalRaw() {
   const data = snapshotFromStore()
-  await api('/api/sync', {
-    method: 'PUT',
-    body: JSON.stringify({ data }),
-  })
+  const result = await api<{ ok: true; revision: number; updatedAt: string }>(
+    '/api/sync',
+    {
+      method: 'PUT',
+      body: JSON.stringify({ data, revision: syncRevision }),
+    },
+  )
+  syncRevision = result.revision
+}
+
+export async function pushLocal() {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      await pushLocalRaw()
+      return
+    } catch (err) {
+      if (
+        !isRevisionConflictError(err) ||
+        attempt === 2 ||
+        pullInProgress ||
+        conflictRecoveryInProgress
+      ) {
+        throw err
+      }
+      conflictRecoveryInProgress = true
+      try {
+        await recoverFromConflict()
+      } finally {
+        conflictRecoveryInProgress = false
+      }
+    }
+  }
 }
