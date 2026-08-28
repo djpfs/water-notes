@@ -234,6 +234,11 @@ function minutesOfDay(date: Date): number {
   return date.getHours() * 60 + date.getMinutes()
 }
 
+function dayKeyFromDate(date: Date): 'sun' | 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' {
+  const keys = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const
+  return keys[date.getDay()] ?? 'sun'
+}
+
 function isWithinWindow(
   nowM: number,
   startH: number,
@@ -255,6 +260,72 @@ function localDateKey(date: Date): string {
   return `${y}-${m}-${d}`
 }
 
+type ScheduledNotificationSettings = {
+  enabled?: boolean
+  intervalMinutes?: number
+  windowStartHour?: number
+  windowStartMinute?: number
+  windowEndHour?: number
+  windowEndMinute?: number
+  useWeekdayWindows?: boolean
+  weeklyWindows?: Partial<
+    Record<
+      'sun' | 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat',
+      {
+        startHour?: number
+        startMinute?: number
+        endHour?: number
+        endMinute?: number
+      }
+    >
+  >
+  adaptiveEnabled?: boolean
+  pauseWhenGoalReached?: boolean
+}
+
+function activeWindowForDay(
+  notifications: ScheduledNotificationSettings,
+  date: Date,
+): { startHour: number; startMinute: number; endHour: number; endMinute: number } {
+  const fallback = {
+    startHour: notifications.windowStartHour ?? 8,
+    startMinute: notifications.windowStartMinute ?? 0,
+    endHour: notifications.windowEndHour ?? 22,
+    endMinute: notifications.windowEndMinute ?? 0,
+  }
+  if (!notifications.useWeekdayWindows) return fallback
+  const dayWindow = notifications.weeklyWindows?.[dayKeyFromDate(date)]
+  if (!dayWindow) return fallback
+  return {
+    startHour: dayWindow.startHour ?? fallback.startHour,
+    startMinute: dayWindow.startMinute ?? fallback.startMinute,
+    endHour: dayWindow.endHour ?? fallback.endHour,
+    endMinute: dayWindow.endMinute ?? fallback.endMinute,
+  }
+}
+
+function adaptiveIntervalMs(
+  notifications: ScheduledNotificationSettings,
+  entries: { ml: number; at: string }[],
+  nowUtc: number,
+): number {
+  const baseMs = Math.max(1, notifications.intervalMinutes ?? 60) * 60_000
+  if (notifications.adaptiveEnabled === false) return baseMs
+  const lastEntryAt = entries
+    .map((entry) => new Date(entry.at).getTime())
+    .filter((time) => !Number.isNaN(time))
+    .sort((a, b) => b - a)[0]
+  if (!lastEntryAt) return Math.min(4 * 60 * 60 * 1000, Math.round(baseMs * 1.25))
+  const diff = nowUtc - lastEntryAt
+  if (diff <= 90 * 60 * 1000) {
+    return Math.max(15 * 60 * 1000, Math.round(baseMs * 0.75))
+  }
+  if (diff >= 6 * 60 * 60 * 1000) {
+    return Math.min(4 * 60 * 60 * 1000, Math.round(baseMs * 1.5))
+  }
+  return baseMs
+}
+
 function todayConsumed(payload: SyncPayload, today: string): number {
   const entries = (payload.entries as { ml: number; at: string }[]) ?? []
   return entries
@@ -262,15 +333,41 @@ function todayConsumed(payload: SyncPayload, today: string): number {
     .reduce((sum, e) => sum + e.ml, 0)
 }
 
-function dailyGoal(payload: SyncPayload): number {
+function dailyGoal(payload: SyncPayload, dateKey: string): number {
   const profile = payload.profile as {
     weightKg?: number
     goalOverrideMl?: number | null
+    activityLevel?: 'low' | 'moderate' | 'high'
+    heatLevel?: 'mild' | 'warm' | 'hot'
+    climateAdjustmentMl?: number
+    weekdayGoalMl?: number | null
+    weekendGoalMl?: number | null
   }
+  const date = new Date(`${dateKey}T12:00:00`)
+  const isWeekend = date.getDay() === 0 || date.getDay() === 6
+  const dayOverride = isWeekend ? profile.weekendGoalMl : profile.weekdayGoalMl
+  if (dayOverride != null && dayOverride > 0) return Math.round(dayOverride)
   const override = profile?.goalOverrideMl
-  if (override != null && override > 0) return Math.round(override)
   const weight = profile?.weightKg ?? 70
-  return Math.round(Math.max(0, weight) * 35)
+  const base = override != null && override > 0 ? Math.round(override) : Math.round(Math.max(0, weight) * 35)
+  const activity =
+    profile.activityLevel === 'high'
+      ? 500
+      : profile.activityLevel === 'moderate'
+        ? 250
+        : 0
+  const heat =
+    profile.heatLevel === 'hot'
+      ? 400
+      : profile.heatLevel === 'warm'
+        ? 200
+        : 0
+  const climate = Number.isFinite(profile.climateAdjustmentMl)
+    ? Math.round(profile.climateAdjustmentMl ?? 0)
+    : 0
+  const total = base + activity + heat + climate
+  if (total <= 0) return 0
+  return total
 }
 
 export async function runScheduledPushReminders(env: Env) {
@@ -288,39 +385,33 @@ export async function runScheduledPushReminders(env: Env) {
   for (const row of results ?? []) {
     try {
       const payload = JSON.parse(row.payload) as SyncPayload
-      const notifications = payload.notifications as {
-        enabled?: boolean
-        intervalMinutes?: number
-        windowStartHour?: number
-        windowStartMinute?: number
-        windowEndHour?: number
-        windowEndMinute?: number
-        pauseWhenGoalReached?: boolean
-      }
+      const notifications = payload.notifications as ScheduledNotificationSettings
 
       if (!notifications?.enabled) continue
 
       const localNow = new Date(nowUtc + row.tz_offset_minutes * 60_000)
       const nowM = minutesOfDay(localNow)
+      const window = activeWindowForDay(notifications, localNow)
       if (
         !isWithinWindow(
           nowM,
-          notifications.windowStartHour ?? 8,
-          notifications.windowStartMinute ?? 0,
-          notifications.windowEndHour ?? 22,
-          notifications.windowEndMinute ?? 0,
+          window.startHour,
+          window.startMinute,
+          window.endHour,
+          window.endMinute,
         )
       ) {
         continue
       }
 
       const today = localDateKey(localNow)
-      const goal = dailyGoal(payload)
+      const entries = (payload.entries as { ml: number; at: string }[]) ?? []
+      const goal = dailyGoal(payload, today)
       const consumed = todayConsumed(payload, today)
       const goalReached = goal > 0 && consumed >= goal
       if (notifications.pauseWhenGoalReached !== false && goalReached) continue
 
-      const intervalMs = Math.max(1, notifications.intervalMinutes ?? 60) * 60_000
+      const intervalMs = adaptiveIntervalMs(notifications, entries, nowUtc)
       if (row.last_sent_at) {
         const last = new Date(row.last_sent_at).getTime()
         if (nowUtc - last < intervalMs) continue

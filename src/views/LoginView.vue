@@ -17,6 +17,13 @@ const { t } = useI18n()
 const busy = ref(true)
 const error = ref('')
 
+async function continueAsGuest() {
+  if (!store.profile.onboarded) {
+    store.skipOnboarding()
+  }
+  await router.replace({ name: 'home' })
+}
+
 async function finishAuthFlow() {
   const user = await fetchMe(true)
   if (!user) {
@@ -122,6 +129,13 @@ onMounted(async () => {
             />
           </svg>
           {{ t('login.continueGoogle') }}
+        </button>
+        <button
+          type="button"
+          class="mt-3 h-11 w-full max-w-sm rounded-2xl bg-mist-deep text-sm font-semibold text-ink"
+          @click="continueAsGuest"
+        >
+          {{ t('login.continueGuest') }}
         </button>
         <p v-if="error" class="mt-4 text-sm text-amber-deep">{{ error }}</p>
       </template>

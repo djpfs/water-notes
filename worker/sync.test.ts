@@ -76,6 +76,58 @@ describe('isValidSyncPayload', () => {
       }),
     ).toBe(false)
   })
+
+  it('accepts advanced profile and reminder settings', () => {
+    expect(
+      isValidSyncPayload({
+        ...validPayload,
+        profile: {
+          ...validPayload.profile,
+          activityLevel: 'high',
+          heatLevel: 'warm',
+          climateAdjustmentMl: 150,
+          weekdayGoalMl: 2600,
+          weekendGoalMl: 2200,
+          weeklyGoalDays: 5,
+        },
+        notifications: {
+          ...validPayload.notifications,
+          useWeekdayWindows: true,
+          adaptiveEnabled: true,
+          weeklyWindows: {
+            sun: { startHour: 9, startMinute: 0, endHour: 20, endMinute: 0 },
+            mon: { startHour: 8, startMinute: 0, endHour: 22, endMinute: 0 },
+            tue: { startHour: 8, startMinute: 0, endHour: 22, endMinute: 0 },
+            wed: { startHour: 8, startMinute: 0, endHour: 22, endMinute: 0 },
+            thu: { startHour: 8, startMinute: 0, endHour: 22, endMinute: 0 },
+            fri: { startHour: 8, startMinute: 0, endHour: 22, endMinute: 0 },
+            sat: { startHour: 9, startMinute: 0, endHour: 21, endMinute: 0 },
+          },
+        },
+      }),
+    ).toBe(true)
+  })
+
+  it('rejects invalid weekday reminder windows', () => {
+    expect(
+      isValidSyncPayload({
+        ...validPayload,
+        notifications: {
+          ...validPayload.notifications,
+          useWeekdayWindows: true,
+          weeklyWindows: {
+            sun: { startHour: 8, startMinute: 0, endHour: 22, endMinute: 0 },
+            mon: { startHour: 8, startMinute: 0, endHour: 22, endMinute: 0 },
+            tue: { startHour: 8, startMinute: 0, endHour: 22, endMinute: 0 },
+            wed: { startHour: 8, startMinute: 0, endHour: 22, endMinute: 0 },
+            thu: { startHour: 8, startMinute: 0, endHour: 22, endMinute: 0 },
+            fri: { startHour: 8, startMinute: 0, endHour: 22, endMinute: 0 },
+            sat: { startHour: 30, startMinute: 0, endHour: 22, endMinute: 0 },
+          },
+        },
+      }),
+    ).toBe(false)
+  })
 })
 
 describe('parseExpectedRevision', () => {

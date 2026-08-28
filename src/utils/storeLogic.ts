@@ -1,4 +1,4 @@
-import { ML_PER_KG, type DayStat } from '@/types'
+import { ML_PER_KG, type DayStat, type Profile } from '@/types'
 import { addDays, localDateKey } from '@/utils/date'
 
 export function resolveDailyGoalMl(
@@ -7,6 +7,49 @@ export function resolveDailyGoalMl(
 ): number {
   if (goalOverrideMl != null && goalOverrideMl > 0) return Math.round(goalOverrideMl)
   return Math.round(Math.max(0, weightKg) * ML_PER_KG)
+}
+
+function isWeekend(dateKey: string): boolean {
+  const date = new Date(`${dateKey}T12:00:00`)
+  const day = date.getDay()
+  return day === 0 || day === 6
+}
+
+export function goalAdjustmentsMl(profile: Pick<
+  Profile,
+  'activityLevel' | 'heatLevel' | 'climateAdjustmentMl'
+>): number {
+  const activityBonus =
+    profile.activityLevel === 'high'
+      ? 500
+      : profile.activityLevel === 'moderate'
+        ? 250
+        : 0
+  const heatBonus =
+    profile.heatLevel === 'hot' ? 400 : profile.heatLevel === 'warm' ? 200 : 0
+  const manual = Number.isFinite(profile.climateAdjustmentMl)
+    ? Math.round(profile.climateAdjustmentMl)
+    : 0
+  return activityBonus + heatBonus + manual
+}
+
+export function resolveGoalForDate(
+  profile: Pick<
+    Profile,
+    | 'weightKg'
+    | 'goalOverrideMl'
+    | 'activityLevel'
+    | 'heatLevel'
+    | 'climateAdjustmentMl'
+    | 'weekdayGoalMl'
+    | 'weekendGoalMl'
+  >,
+  dateKey = localDateKey(),
+): number {
+  const dayOverride = isWeekend(dateKey) ? profile.weekendGoalMl : profile.weekdayGoalMl
+  if (dayOverride != null && dayOverride > 0) return Math.round(dayOverride)
+  const base = resolveDailyGoalMl(profile.weightKg, profile.goalOverrideMl)
+  return Math.max(0, base + goalAdjustmentsMl(profile))
 }
 
 export function goalForDateKey(

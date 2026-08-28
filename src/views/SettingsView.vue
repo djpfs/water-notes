@@ -13,6 +13,7 @@ import {
   logoutRemote,
   pullAndMerge,
   pushLocal,
+  startGoogleLogin,
 } from '@/composables/useCloudSync'
 import {
   disableNotifications,
@@ -24,7 +25,18 @@ import {
 import { canUseRemotePush, testRemotePush } from '@/composables/useRemotePush'
 import { useToast } from '@/composables/useToast'
 import { useAppStore } from '@/stores/app'
-import { ML_PER_KG, NOTIFICATION_INTERVALS, APP_LOCALES, type AppLocale, type ThemeMode } from '@/types'
+import {
+  ACTIVITY_LEVELS,
+  APP_LOCALES,
+  HEAT_LEVELS,
+  ML_PER_KG,
+  NOTIFICATION_INTERVALS,
+  WEEKDAY_KEYS,
+  WEEKLY_GOAL_DAY_OPTIONS,
+  type AppLocale,
+  type ThemeMode,
+  type WeekdayKey,
+} from '@/types'
 import { formatVolume } from '@/utils/date'
 import { goBackOr } from '@/utils/navigation'
 import { formatClock, parseClock } from '@/utils/timeWindow'
@@ -51,6 +63,14 @@ const useCustomGoal = ref(store.profile.goalOverrideMl != null)
 const customGoal = ref(
   String(store.profile.goalOverrideMl ?? store.defaultGoalMl),
 )
+const activityLevel = ref(store.profile.activityLevel)
+const heatLevel = ref(store.profile.heatLevel)
+const climateAdjustment = ref(String(store.profile.climateAdjustmentMl ?? 0))
+const useWeekdayGoal = ref(store.profile.weekdayGoalMl != null)
+const weekdayGoal = ref(String(store.profile.weekdayGoalMl ?? store.dailyGoalMl))
+const useWeekendGoal = ref(store.profile.weekendGoalMl != null)
+const weekendGoal = ref(String(store.profile.weekendGoalMl ?? store.dailyGoalMl))
+const weeklyGoalDays = ref(String(store.profile.weeklyGoalDays ?? 5))
 const bedtime = ref(
   `${String(store.profile.bedtimeHour ?? 22).padStart(2, '0')}:${String(store.profile.bedtimeMinute ?? 0).padStart(2, '0')}`,
 )
@@ -71,6 +91,68 @@ const windowEnd = ref(
 const pauseWhenGoalReached = ref(
   store.notifications.pauseWhenGoalReached !== false,
 )
+const useWeekdayWindows = ref(store.notifications.useWeekdayWindows === true)
+const adaptiveEnabled = ref(store.notifications.adaptiveEnabled !== false)
+const weekdayWindowStart = ref<Record<WeekdayKey, string>>({
+  sun: formatClock(
+    store.notifications.weeklyWindows.sun.startHour,
+    store.notifications.weeklyWindows.sun.startMinute,
+  ),
+  mon: formatClock(
+    store.notifications.weeklyWindows.mon.startHour,
+    store.notifications.weeklyWindows.mon.startMinute,
+  ),
+  tue: formatClock(
+    store.notifications.weeklyWindows.tue.startHour,
+    store.notifications.weeklyWindows.tue.startMinute,
+  ),
+  wed: formatClock(
+    store.notifications.weeklyWindows.wed.startHour,
+    store.notifications.weeklyWindows.wed.startMinute,
+  ),
+  thu: formatClock(
+    store.notifications.weeklyWindows.thu.startHour,
+    store.notifications.weeklyWindows.thu.startMinute,
+  ),
+  fri: formatClock(
+    store.notifications.weeklyWindows.fri.startHour,
+    store.notifications.weeklyWindows.fri.startMinute,
+  ),
+  sat: formatClock(
+    store.notifications.weeklyWindows.sat.startHour,
+    store.notifications.weeklyWindows.sat.startMinute,
+  ),
+})
+const weekdayWindowEnd = ref<Record<WeekdayKey, string>>({
+  sun: formatClock(
+    store.notifications.weeklyWindows.sun.endHour,
+    store.notifications.weeklyWindows.sun.endMinute,
+  ),
+  mon: formatClock(
+    store.notifications.weeklyWindows.mon.endHour,
+    store.notifications.weeklyWindows.mon.endMinute,
+  ),
+  tue: formatClock(
+    store.notifications.weeklyWindows.tue.endHour,
+    store.notifications.weeklyWindows.tue.endMinute,
+  ),
+  wed: formatClock(
+    store.notifications.weeklyWindows.wed.endHour,
+    store.notifications.weeklyWindows.wed.endMinute,
+  ),
+  thu: formatClock(
+    store.notifications.weeklyWindows.thu.endHour,
+    store.notifications.weeklyWindows.thu.endMinute,
+  ),
+  fri: formatClock(
+    store.notifications.weeklyWindows.fri.endHour,
+    store.notifications.weeklyWindows.fri.endMinute,
+  ),
+  sat: formatClock(
+    store.notifications.weeklyWindows.sat.endHour,
+    store.notifications.weeklyWindows.sat.endMinute,
+  ),
+})
 const importConfirmOpen = ref(false)
 const pendingImport = ref<unknown>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -100,14 +182,52 @@ const customGoalNumber = computed(() => {
   return Number.isFinite(n) ? n : 0
 })
 
+const weekdayGoalNumber = computed(() => {
+  const n = Number(String(weekdayGoal.value).replace(',', '.'))
+  return Number.isFinite(n) ? n : 0
+})
+
+const weekendGoalNumber = computed(() => {
+  const n = Number(String(weekendGoal.value).replace(',', '.'))
+  return Number.isFinite(n) ? n : 0
+})
+
+const climateAdjustmentNumber = computed(() => {
+  const n = Number(String(climateAdjustment.value).replace(',', '.'))
+  return Number.isFinite(n) ? n : 0
+})
+
+const weeklyGoalDaysNumber = computed(() => {
+  const n = Number(String(weeklyGoalDays.value).replace(',', '.'))
+  return Number.isFinite(n) ? Math.round(n) : 5
+})
+
 const profileFieldsValid = computed(() => {
   if (nickname.value.trim().length < 2) return false
   return weightNumber.value >= 20 && weightNumber.value <= 300
 })
 
 const metaValid = computed(() => {
-  if (!useCustomGoal.value) return true
-  return customGoalNumber.value >= 500 && customGoalNumber.value <= 10000
+  const customGoalValid =
+    !useCustomGoal.value ||
+    (customGoalNumber.value >= 500 && customGoalNumber.value <= 10000)
+  const weekdayGoalValid =
+    !useWeekdayGoal.value ||
+    (weekdayGoalNumber.value >= 500 && weekdayGoalNumber.value <= 12000)
+  const weekendGoalValid =
+    !useWeekendGoal.value ||
+    (weekendGoalNumber.value >= 500 && weekendGoalNumber.value <= 12000)
+  const climateValid =
+    climateAdjustmentNumber.value >= -1200 && climateAdjustmentNumber.value <= 1200
+  const weeklyGoalDaysValid =
+    weeklyGoalDaysNumber.value >= 3 && weeklyGoalDaysNumber.value <= 7
+  return (
+    customGoalValid &&
+    weekdayGoalValid &&
+    weekendGoalValid &&
+    climateValid &&
+    weeklyGoalDaysValid
+  )
 })
 
 const themes = computed(() => [
@@ -115,6 +235,17 @@ const themes = computed(() => [
   { id: 'light' as ThemeMode, label: t('settings.themeLight') },
   { id: 'dark' as ThemeMode, label: t('settings.themeDark') },
 ])
+
+const activityOptions = ACTIVITY_LEVELS
+const heatOptions = HEAT_LEVELS
+const weeklyGoalDayOptions = WEEKLY_GOAL_DAY_OPTIONS
+
+const weekdayOptions = computed(() =>
+  WEEKDAY_KEYS.map((id) => ({
+    id,
+    label: t(`settings.weekday.${id}`),
+  })),
+)
 
 const sections = computed(() => [
   { id: 'conta', title: t('settings.account'), keywords: 'conta login google sync account' },
@@ -166,6 +297,32 @@ function intervalOptionLabel(minutes: number): string {
   return t('settings.everyLabel', { value })
 }
 
+function updateWeekdayWindowInputsFromStore() {
+  for (const key of WEEKDAY_KEYS) {
+    const window = store.notifications.weeklyWindows[key]
+    weekdayWindowStart.value[key] = formatClock(window.startHour, window.startMinute)
+    weekdayWindowEnd.value[key] = formatClock(window.endHour, window.endMinute)
+  }
+}
+
+function buildWeeklyWindowsPayload() {
+  const next = {} as Record<
+    WeekdayKey,
+    { startHour: number; startMinute: number; endHour: number; endMinute: number }
+  >
+  for (const key of WEEKDAY_KEYS) {
+    const start = parseClock(weekdayWindowStart.value[key])
+    const end = parseClock(weekdayWindowEnd.value[key])
+    next[key] = {
+      startHour: start.hour,
+      startMinute: start.minute,
+      endHour: end.hour,
+      endMinute: end.minute,
+    }
+  }
+  return next
+}
+
 function parseBedtime(): { bedtimeHour: number; bedtimeMinute: number } {
   const [h, m] = bedtime.value.split(':').map(Number)
   return {
@@ -189,6 +346,12 @@ function saveMeta() {
   if (!metaValid.value) return
   store.updateProfile({
     goalOverrideMl: useCustomGoal.value ? customGoalNumber.value : null,
+    activityLevel: activityLevel.value,
+    heatLevel: heatLevel.value,
+    climateAdjustmentMl: climateAdjustmentNumber.value,
+    weekdayGoalMl: useWeekdayGoal.value ? weekdayGoalNumber.value : null,
+    weekendGoalMl: useWeekendGoal.value ? weekendGoalNumber.value : null,
+    weeklyGoalDays: weeklyGoalDaysNumber.value,
     ...parseBedtime(),
   })
   showToast(t('settings.goalSaved'))
@@ -291,7 +454,7 @@ async function onLogout() {
     await logoutRemote()
     clearAuthCache()
     cloudUser.value = null
-    await router.replace({ name: 'login' })
+    await router.replace({ name: 'home' })
   } catch (err) {
     cloudError.value = err instanceof Error ? err.message : t('settings.logoutError')
   } finally {
@@ -307,7 +470,7 @@ async function confirmDeleteAccount() {
     await deleteAccountRemote()
     store.resetAll()
     cloudUser.value = null
-    await router.replace({ name: 'login' })
+    await router.replace({ name: 'onboarding' })
   } catch (err) {
     cloudError.value =
       err instanceof Error ? err.message : t('settings.deleteAccountError')
@@ -350,6 +513,7 @@ async function onPushOnly() {
 
 onMounted(async () => {
   cloudUser.value = await fetchMe(true)
+  updateWeekdayWindowInputsFromStore()
 })
 
 async function saveReminderWindow() {
@@ -360,8 +524,12 @@ async function saveReminderWindow() {
     windowStartMinute: start.minute,
     windowEndHour: end.hour,
     windowEndMinute: end.minute,
+    useWeekdayWindows: useWeekdayWindows.value,
+    weeklyWindows: buildWeeklyWindowsPayload(),
+    adaptiveEnabled: adaptiveEnabled.value,
     pauseWhenGoalReached: pauseWhenGoalReached.value,
   })
+  updateWeekdayWindowInputsFromStore()
   showToast(t('settings.remindersSaved'))
 }
 
@@ -403,7 +571,27 @@ function applyImport(data: unknown) {
   customGoal.value = String(
     store.profile.goalOverrideMl ?? store.defaultGoalMl,
   )
+  activityLevel.value = store.profile.activityLevel
+  heatLevel.value = store.profile.heatLevel
+  climateAdjustment.value = String(store.profile.climateAdjustmentMl ?? 0)
+  useWeekdayGoal.value = store.profile.weekdayGoalMl != null
+  weekdayGoal.value = String(store.profile.weekdayGoalMl ?? store.dailyGoalMl)
+  useWeekendGoal.value = store.profile.weekendGoalMl != null
+  weekendGoal.value = String(store.profile.weekendGoalMl ?? store.dailyGoalMl)
+  weeklyGoalDays.value = String(store.profile.weeklyGoalDays ?? 5)
   bedtime.value = `${String(store.profile.bedtimeHour).padStart(2, '0')}:${String(store.profile.bedtimeMinute).padStart(2, '0')}`
+  windowStart.value = formatClock(
+    store.notifications.windowStartHour,
+    store.notifications.windowStartMinute,
+  )
+  windowEnd.value = formatClock(
+    store.notifications.windowEndHour,
+    store.notifications.windowEndMinute,
+  )
+  useWeekdayWindows.value = store.notifications.useWeekdayWindows === true
+  adaptiveEnabled.value = store.notifications.adaptiveEnabled !== false
+  pauseWhenGoalReached.value = store.notifications.pauseWhenGoalReached !== false
+  updateWeekdayWindowInputsFromStore()
   feedbackSound.value = store.feedback.sound
   feedbackHaptic.value = store.feedback.haptic
   locale.value = store.locale
@@ -541,6 +729,14 @@ async function onImportFile(event: Event) {
         <p v-else class="px-4 py-3 text-sm text-ink-soft">
           {{ t('settings.goToLoginForSync') }}
         </p>
+        <button
+          v-if="!cloudUser"
+          type="button"
+          class="flex h-12 w-full items-center border-t border-line px-4 text-left text-sm font-medium text-teal"
+          @click="startGoogleLogin"
+        >
+          {{ t('login.continueGoogle') }}
+        </button>
       </div>
       <p v-if="cloudError" class="mt-2 px-1 text-sm text-amber-deep">{{ cloudError }}</p>
       <p v-if="cloudMsg" class="mt-2 px-1 text-sm text-teal-deep">{{ cloudMsg }}</p>
@@ -618,6 +814,95 @@ async function onImportFile(event: Event) {
             step="50"
             class="w-full bg-transparent font-display text-xl font-bold text-ink outline-none"
           />
+        </label>
+        <label class="block border-b border-line px-4 py-3">
+          <span class="mb-1.5 block text-xs text-ink-soft">{{ t('settings.activityLevel') }}</span>
+          <select v-model="activityLevel" class="w-full bg-transparent text-ink outline-none">
+            <option
+              v-for="item in activityOptions"
+              :key="item.id"
+              :value="item.id"
+            >
+              {{ t(item.labelKey) }}
+            </option>
+          </select>
+        </label>
+        <label class="block border-b border-line px-4 py-3">
+          <span class="mb-1.5 block text-xs text-ink-soft">{{ t('settings.heatLevel') }}</span>
+          <select v-model="heatLevel" class="w-full bg-transparent text-ink outline-none">
+            <option
+              v-for="item in heatOptions"
+              :key="item.id"
+              :value="item.id"
+            >
+              {{ t(item.labelKey) }}
+            </option>
+          </select>
+        </label>
+        <label class="block border-b border-line px-4 py-3">
+          <span class="mb-1.5 block text-xs text-ink-soft">{{ t('settings.climateAdjustment') }}</span>
+          <input
+            v-model="climateAdjustment"
+            type="number"
+            inputmode="numeric"
+            min="-1200"
+            max="1200"
+            step="50"
+            class="w-full bg-transparent text-ink outline-none"
+          />
+          <p class="mt-1 text-xs text-ink-soft">{{ t('settings.climateAdjustmentHint') }}</p>
+        </label>
+        <label class="flex items-center gap-3 border-b border-line px-4 py-3">
+          <input
+            v-model="useWeekdayGoal"
+            type="checkbox"
+            class="size-5 accent-[oklch(0.48_0.10_238)]"
+          />
+          <span class="text-sm font-medium text-ink">{{ t('settings.weekdayGoalToggle') }}</span>
+        </label>
+        <label v-if="useWeekdayGoal" class="block border-b border-line px-4 py-3">
+          <span class="mb-1.5 block text-xs text-ink-soft">{{ t('settings.weekdayGoalLabel') }}</span>
+          <input
+            v-model="weekdayGoal"
+            type="number"
+            inputmode="numeric"
+            min="500"
+            max="12000"
+            step="50"
+            class="w-full bg-transparent text-ink outline-none"
+          />
+        </label>
+        <label class="flex items-center gap-3 border-b border-line px-4 py-3">
+          <input
+            v-model="useWeekendGoal"
+            type="checkbox"
+            class="size-5 accent-[oklch(0.48_0.10_238)]"
+          />
+          <span class="text-sm font-medium text-ink">{{ t('settings.weekendGoalToggle') }}</span>
+        </label>
+        <label v-if="useWeekendGoal" class="block border-b border-line px-4 py-3">
+          <span class="mb-1.5 block text-xs text-ink-soft">{{ t('settings.weekendGoalLabel') }}</span>
+          <input
+            v-model="weekendGoal"
+            type="number"
+            inputmode="numeric"
+            min="500"
+            max="12000"
+            step="50"
+            class="w-full bg-transparent text-ink outline-none"
+          />
+        </label>
+        <label class="block border-b border-line px-4 py-3">
+          <span class="mb-1.5 block text-xs text-ink-soft">{{ t('settings.weeklyGoalDays') }}</span>
+          <select v-model="weeklyGoalDays" class="w-full bg-transparent text-ink outline-none">
+            <option
+              v-for="dayCount in weeklyGoalDayOptions"
+              :key="dayCount"
+              :value="String(dayCount)"
+            >
+              {{ t('settings.weeklyGoalDaysOption', { days: dayCount }) }}
+            </option>
+          </select>
         </label>
         <label class="block px-4 py-3">
           <span class="mb-1.5 block text-xs text-ink-soft">{{ t('settings.bedtime') }}</span>
@@ -698,6 +983,44 @@ async function onImportFile(event: Event) {
               />
             </label>
           </div>
+          <label class="flex items-center gap-3 border-t border-line px-4 py-3">
+            <input
+              v-model="useWeekdayWindows"
+              type="checkbox"
+              class="size-5 accent-[oklch(0.48_0.10_238)]"
+            />
+            <span class="text-sm font-medium text-ink">{{ t('settings.weekdayWindowsToggle') }}</span>
+          </label>
+          <div
+            v-if="useWeekdayWindows"
+            class="divide-y divide-line border-t border-line"
+          >
+            <div
+              v-for="item in weekdayOptions"
+              :key="item.id"
+              class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] gap-2 px-4 py-3"
+            >
+              <p class="text-sm font-medium text-ink">{{ item.label }}</p>
+              <input
+                v-model="weekdayWindowStart[item.id]"
+                type="time"
+                class="w-full rounded-lg bg-mist-deep px-2 py-1.5 text-sm text-ink outline-none"
+              />
+              <input
+                v-model="weekdayWindowEnd[item.id]"
+                type="time"
+                class="w-full rounded-lg bg-mist-deep px-2 py-1.5 text-sm text-ink outline-none"
+              />
+            </div>
+          </div>
+          <label class="flex items-center gap-3 border-t border-line px-4 py-3">
+            <input
+              v-model="adaptiveEnabled"
+              type="checkbox"
+              class="size-5 accent-[oklch(0.48_0.10_238)]"
+            />
+            <span class="text-sm font-medium text-ink">{{ t('settings.adaptiveReminders') }}</span>
+          </label>
           <label class="flex items-center gap-3 border-t border-line px-4 py-3">
             <input
               v-model="pauseWhenGoalReached"

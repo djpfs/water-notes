@@ -15,6 +15,8 @@ import {
   type ThemeMode,
   type WaterEntry,
   DEFAULT_LOCALE,
+  WEEKDAY_KEYS,
+  type WeeklyReminderWindows,
 } from '@/types'
 import { detectLocale, setI18nLocale } from '@/i18n'
 import { addDays, hoursUntilBedtime, localDateKey, snapMl } from '@/utils/date'
@@ -27,18 +29,49 @@ import {
   pruneEntriesBefore,
   pruneSnapshotsBefore,
   resolveDailyGoalMl,
+  resolveGoalForDate,
 } from '@/utils/storeLogic'
 
 const KEEP_DAYS = 90
 
+function normalizeWeeklyWindows(
+  raw: WeeklyReminderWindows | undefined,
+  fallback: NotificationSettings,
+): WeeklyReminderWindows {
+  const clamp = (value: unknown, min: number, max: number, fallbackValue: number) => {
+    const num = Number(value)
+    if (!Number.isFinite(num)) return fallbackValue
+    return Math.min(max, Math.max(min, Math.round(num)))
+  }
+  const normalized = { ...DEFAULT_NOTIFICATIONS.weeklyWindows }
+  for (const key of WEEKDAY_KEYS) {
+    const source = raw?.[key] ?? normalized[key]
+    normalized[key] = {
+      startHour: clamp(source?.startHour, 0, 23, fallback.windowStartHour),
+      startMinute: clamp(source?.startMinute, 0, 59, fallback.windowStartMinute),
+      endHour: clamp(source?.endHour, 0, 23, fallback.windowEndHour),
+      endMinute: clamp(source?.endMinute, 0, 59, fallback.windowEndMinute),
+    }
+  }
+  return normalized
+}
+
 function normalizeNotifications(
   raw: Partial<NotificationSettings> | undefined,
 ): NotificationSettings {
-  return {
+  const merged: NotificationSettings = {
     ...DEFAULT_NOTIFICATIONS,
     ...raw,
     pauseWhenGoalReached: raw?.pauseWhenGoalReached !== false,
+    useWeekdayWindows: raw?.useWeekdayWindows === true,
+    adaptiveEnabled: raw?.adaptiveEnabled !== false,
+    weeklyWindows: { ...DEFAULT_NOTIFICATIONS.weeklyWindows },
   }
+  merged.weeklyWindows = normalizeWeeklyWindows(
+    raw?.weeklyWindows as WeeklyReminderWindows | undefined,
+    merged,
+  )
+  return merged
 }
 
 function normalizeFeedback(
@@ -56,6 +89,12 @@ const emptyProfile = (): Profile => ({
   avatarId: 'drop',
   onboarded: false,
   goalOverrideMl: null,
+  activityLevel: 'low',
+  heatLevel: 'mild',
+  climateAdjustmentMl: 0,
+  weekdayGoalMl: null,
+  weekendGoalMl: null,
+  weeklyGoalDays: 5,
   bedtimeHour: 22,
   bedtimeMinute: 0,
   email: null,
@@ -65,11 +104,31 @@ const emptyProfile = (): Profile => ({
 
 function normalizeProfile(raw: Partial<Profile> | undefined): Profile {
   const base = emptyProfile()
+  const climateAdjustment = Number(raw?.climateAdjustmentMl)
+  const weeklyGoalDaysRaw = Number(raw?.weeklyGoalDays)
   return {
     ...base,
     ...raw,
     goalOverrideMl:
       raw?.goalOverrideMl === undefined ? null : raw.goalOverrideMl,
+    activityLevel:
+      raw?.activityLevel === 'moderate' || raw?.activityLevel === 'high'
+        ? raw.activityLevel
+        : 'low',
+    heatLevel:
+      raw?.heatLevel === 'warm' || raw?.heatLevel === 'hot'
+        ? raw.heatLevel
+        : 'mild',
+    climateAdjustmentMl: Number.isFinite(climateAdjustment)
+      ? Math.round(climateAdjustment)
+      : 0,
+    weekdayGoalMl:
+      raw?.weekdayGoalMl === undefined ? null : raw.weekdayGoalMl,
+    weekendGoalMl:
+      raw?.weekendGoalMl === undefined ? null : raw.weekendGoalMl,
+    weeklyGoalDays: Number.isFinite(weeklyGoalDaysRaw)
+      ? Math.min(7, Math.max(1, Math.round(weeklyGoalDaysRaw)))
+      : 5,
     bedtimeHour: raw?.bedtimeHour ?? 22,
     bedtimeMinute: raw?.bedtimeMinute ?? 0,
     email: raw?.email ?? null,
@@ -88,26 +147,22 @@ export const useAppStore = defineStore(
     const entries = ref<WaterEntry[]>([])
     const celebratedDate = ref<string | null>(null)
     const theme = ref<ThemeMode>('system')
-    const notifications = ref<NotificationSettings>({ ...DEFAULT_NOTIFICATIONS })
+    const notifications = ref<NotificationSettings>(normalizeNotifications(undefined))
     const feedback = ref<FeedbackSettings>({ ...DEFAULT_FEEDBACK })
     const locale = ref<AppLocale>(detectLocale())
     const installDismissedAt = ref<string | null>(null)
     const lastActiveDate = ref<string | null>(null)
     const lastSummaryDate = ref<string | null>(null)
     const dailyGoalSnapshots = ref<Record<string, number>>({})
+    const todayKey = computed(() => localDateKey())
 
     const defaultGoalMl = computed(() =>
       resolveDailyGoalMl(profile.value.weightKg, null),
     )
 
     const dailyGoalMl = computed(() =>
-      resolveDailyGoalMl(
-        profile.value.weightKg,
-        profile.value.goalOverrideMl,
-      ),
+      resolveGoalForDate(profile.value, todayKey.value),
     )
-
-    const todayKey = computed(() => localDateKey())
 
     const todayEntries = computed(() =>
       entries.value
@@ -175,6 +230,33 @@ export const useAppStore = defineStore(
       ),
     )
 
+    const weeklyReachedCount = computed(() =>
+      historyDays(7).filter((day) => day.reached).length,
+    )
+
+    const weeklyGoalTargetDays = computed(() =>
+      Math.min(7, Math.max(1, profile.value.weeklyGoalDays || 5)),
+    )
+
+    const weeklyGoalRate = computed(() =>
+      weeklyReachedCount.value / 7,
+    )
+
+    const weeklyGoalComplete = computed(
+      () => weeklyReachedCount.value >= weeklyGoalTargetDays.value,
+    )
+
+    const badgeIds = computed(() => {
+      const badges: string[] = []
+      if (streak.value >= 3) badges.push('streak-3')
+      if (streak.value >= 7) badges.push('streak-7')
+      if (streak.value >= 30) badges.push('streak-30')
+      if (weeklyGoalComplete.value) badges.push('weekly-goal')
+      const monthReached = historyDays(30).filter((day) => day.reached).length
+      if (monthReached >= 24) badges.push('consistency-80')
+      return badges
+    })
+
     function pruneOldData() {
       const today = localDateKey()
       entries.value = pruneEntriesBefore(entries.value, KEEP_DAYS, today)
@@ -210,7 +292,7 @@ export const useAppStore = defineStore(
 
     function skipOnboarding() {
       completeOnboarding({
-        nickname: 'Visitante',
+        nickname: locale.value === 'en' ? 'Guest' : 'Visitante',
         weightKg: 70,
         avatarId: 'drop',
         goalOverrideMl: null,
@@ -431,7 +513,7 @@ export const useAppStore = defineStore(
       entries.value = []
       celebratedDate.value = null
       theme.value = 'system'
-      notifications.value = { ...DEFAULT_NOTIFICATIONS }
+      notifications.value = normalizeNotifications(undefined)
       feedback.value = { ...DEFAULT_FEEDBACK }
       locale.value = DEFAULT_LOCALE
       setI18nLocale(DEFAULT_LOCALE)
@@ -463,6 +545,11 @@ export const useAppStore = defineStore(
       goalReached,
       suggestedSipMl,
       streak,
+      weeklyReachedCount,
+      weeklyGoalTargetDays,
+      weeklyGoalRate,
+      weeklyGoalComplete,
+      badgeIds,
       historyDays,
       dayStat,
       goalForDate,
@@ -531,10 +618,7 @@ export const useAppStore = defineStore(
         store.dailyGoalSnapshots = store.dailyGoalSnapshots ?? {}
         const today = localDateKey()
         if (!store.dailyGoalSnapshots[today]) {
-          store.dailyGoalSnapshots[today] = resolveDailyGoalMl(
-            store.profile.weightKg,
-            store.profile.goalOverrideMl,
-          )
+          store.dailyGoalSnapshots[today] = resolveGoalForDate(store.profile, today)
         }
         store.entries = pruneEntriesBefore(store.entries ?? [], KEEP_DAYS, today)
         store.dailyGoalSnapshots = pruneSnapshotsBefore(

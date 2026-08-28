@@ -12,15 +12,13 @@ const { t } = useI18n()
 onMounted(() => {
   window.setTimeout(async () => {
     const user = await fetchMe(true)
-    if (!user) {
-      await router.replace({ name: 'login' })
-      return
+    if (user) {
+      store.applyGoogleAccount({
+        name: user.name,
+        email: user.email,
+        picture: user.picture,
+      })
     }
-    store.applyGoogleAccount({
-      name: user.name,
-      email: user.email,
-      picture: user.picture,
-    })
     if (store.profile.onboarded) {
       await router.replace({ name: 'home' })
     } else {

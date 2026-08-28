@@ -74,6 +74,52 @@ function isValidProfile(value: unknown): boolean {
   if (!isNullableString(value.email, 320)) return false
   if (!isNullableString(value.photoUrl, 4096)) return false
   if (!isBoolean(value.useProfilePhoto)) return false
+  if (
+    !(
+      value.activityLevel === undefined ||
+      value.activityLevel === 'low' ||
+      value.activityLevel === 'moderate' ||
+      value.activityLevel === 'high'
+    )
+  ) {
+    return false
+  }
+  if (
+    !(
+      value.heatLevel === undefined ||
+      value.heatLevel === 'mild' ||
+      value.heatLevel === 'warm' ||
+      value.heatLevel === 'hot'
+    )
+  ) {
+    return false
+  }
+  if (
+    !(
+      value.climateAdjustmentMl === undefined ||
+      (isFiniteNumber(value.climateAdjustmentMl) &&
+        value.climateAdjustmentMl >= -2000 &&
+        value.climateAdjustmentMl <= 2000)
+    )
+  ) {
+    return false
+  }
+  const isNullableGoal = (goal: unknown) =>
+    goal === undefined ||
+    goal === null ||
+    (isFiniteNumber(goal) && goal >= 0 && goal <= 20_000)
+  if (!isNullableGoal(value.weekdayGoalMl)) return false
+  if (!isNullableGoal(value.weekendGoalMl)) return false
+  if (
+    !(
+      value.weeklyGoalDays === undefined ||
+      (isFiniteNumber(value.weeklyGoalDays) &&
+        value.weeklyGoalDays >= 1 &&
+        value.weeklyGoalDays <= 7)
+    )
+  ) {
+    return false
+  }
   return true
 }
 
@@ -114,6 +160,40 @@ function isValidNotifications(value: unknown): boolean {
   for (const [field, min, max] of windowBounds) {
     const current = value[field]
     if (!isFiniteNumber(current) || current < min || current > max) return false
+  }
+
+  if (
+    !(
+      value.useWeekdayWindows === undefined ||
+      isBoolean(value.useWeekdayWindows)
+    )
+  ) {
+    return false
+  }
+  if (
+    !(
+      value.adaptiveEnabled === undefined ||
+      isBoolean(value.adaptiveEnabled)
+    )
+  ) {
+    return false
+  }
+  if (value.weeklyWindows !== undefined) {
+    if (!isRecord(value.weeklyWindows)) return false
+    for (const key of ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']) {
+      const dayWindow = value.weeklyWindows[key]
+      if (!isRecord(dayWindow)) return false
+      const fields = [
+        ['startHour', 0, 23],
+        ['startMinute', 0, 59],
+        ['endHour', 0, 23],
+        ['endMinute', 0, 59],
+      ] as const
+      for (const [field, min, max] of fields) {
+        const current = dayWindow[field]
+        if (!isFiniteNumber(current) || current < min || current > max) return false
+      }
+    }
   }
 
   return isBoolean(value.pauseWhenGoalReached)

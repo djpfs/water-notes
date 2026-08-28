@@ -83,6 +83,14 @@ const pullHint = computed(() => {
   return t('home.pullRefresh')
 })
 
+const badgeItems = computed(() =>
+  store.badgeIds.map((id) => ({
+    id,
+    label: t(`gamification.badges.${id}.label`),
+    description: t(`gamification.badges.${id}.description`),
+  })),
+)
+
 watch(
   () => store.todayConsumedMl,
   async () => {
@@ -392,6 +400,30 @@ function onVisibility() {
       {{ store.streak }}
       {{ store.streak === 1 ? t('home.streakDay') : t('home.streakDays') }}
     </div>
+
+    <section class="mt-3 rounded-2xl bg-surface px-4 py-3 ring-1 ring-line">
+      <div class="flex items-center justify-between gap-2">
+        <p class="text-xs font-semibold uppercase tracking-wide text-ink-soft">
+          {{ t('gamification.weeklyGoal') }}
+        </p>
+        <span class="rounded-full bg-teal/10 px-2.5 py-1 text-xs font-semibold text-teal-deep">
+          {{ store.weeklyReachedCount }}/{{ store.weeklyGoalTargetDays }}
+        </span>
+      </div>
+      <p class="mt-2 text-xs text-ink-soft">
+        {{ t('gamification.weeklyGoalHint', { rate: Math.round(store.weeklyGoalRate * 100) }) }}
+      </p>
+      <div v-if="badgeItems.length" class="mt-2 flex flex-wrap gap-2">
+        <span
+          v-for="badge in badgeItems"
+          :key="badge.id"
+          class="rounded-full bg-mist-deep px-3 py-1 text-xs font-semibold text-ink"
+          :title="badge.description"
+        >
+          {{ badge.label }}
+        </span>
+      </div>
+    </section>
 
     <section class="mt-4">
       <WaterVessel

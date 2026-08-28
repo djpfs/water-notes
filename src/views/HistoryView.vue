@@ -28,6 +28,51 @@ const totalConsumed = computed(() =>
   days.value.reduce((sum, d) => sum + d.consumedMl, 0),
 )
 const isEmpty = computed(() => store.entries.length === 0)
+const weeklyAverage = computed(() => {
+  const week = store.historyDays(7)
+  const total = week.reduce((sum, day) => sum + day.consumedMl, 0)
+  return Math.round(total / 7)
+})
+const monthlyAverage = computed(() => {
+  const month = store.historyDays(30)
+  const total = month.reduce((sum, day) => sum + day.consumedMl, 0)
+  return Math.round(total / 30)
+})
+const goalRate = computed(() => Math.round((reachedCount.value / range.value) * 100))
+const bestDay = computed(() => {
+  const best = [...days.value].sort((a, b) => b.consumedMl - a.consumedMl)[0]
+  if (!best || best.consumedMl <= 0) return null
+  return best
+})
+const rangeStart = computed(() => addDays(todayKey.value, -(range.value - 1)))
+const entriesInRange = computed(() =>
+  store.entries.filter((entry) => {
+    const key = localDateKey(new Date(entry.at))
+    return key >= rangeStart.value && key <= todayKey.value
+  }),
+)
+const bestHour = computed(() => {
+  if (!entriesInRange.value.length) return null
+  const totals = new Map<number, number>()
+  for (const entry of entriesInRange.value) {
+    const hour = new Date(entry.at).getHours()
+    totals.set(hour, (totals.get(hour) ?? 0) + entry.ml)
+  }
+  const winner = [...totals.entries()].sort((a, b) => b[1] - a[1])[0]
+  if (!winner) return null
+  const hour = String(winner[0]).padStart(2, '0')
+  return {
+    hour,
+    totalMl: winner[1],
+  }
+})
+const badgeItems = computed(() =>
+  store.badgeIds.map((id) => ({
+    id,
+    label: t(`gamification.badges.${id}.label`),
+    description: t(`gamification.badges.${id}.description`),
+  })),
+)
 
 const selectedStat = computed(() => store.dayStat(selectedDate.value))
 
@@ -97,6 +142,86 @@ watch(todayKey, (today) => {
             {{ reachedCount }}/{{ range }}
           </p>
           <p class="text-xs text-ink-soft">{{ t('history.total', { amount: formatVolume(totalConsumed) }) }}</p>
+        </div>
+      </section>
+
+      <section class="mt-4 grid grid-cols-2 gap-3">
+        <div class="rounded-2xl bg-surface p-4 ring-1 ring-line">
+          <p class="text-xs font-semibold uppercase tracking-wide text-ink-soft">
+            {{ t('history.avgWeek') }}
+          </p>
+          <p class="mt-1 font-display text-2xl font-bold text-ink tabular-nums">
+            {{ formatVolume(weeklyAverage) }}
+          </p>
+        </div>
+        <div class="rounded-2xl bg-surface p-4 ring-1 ring-line">
+          <p class="text-xs font-semibold uppercase tracking-wide text-ink-soft">
+            {{ t('history.avgMonth') }}
+          </p>
+          <p class="mt-1 font-display text-2xl font-bold text-ink tabular-nums">
+            {{ formatVolume(monthlyAverage) }}
+          </p>
+        </div>
+      </section>
+
+      <section class="mt-4 rounded-2xl bg-surface p-4 ring-1 ring-line">
+        <p class="text-xs font-semibold uppercase tracking-wide text-ink-soft">
+          {{ t('history.goalRate') }}
+        </p>
+        <p class="mt-1 font-display text-3xl font-bold text-teal-deep tabular-nums">
+          {{ goalRate }}%
+        </p>
+        <p class="mt-1 text-xs text-ink-soft">
+          {{ t('history.goalRateHint', { reached: reachedCount, total: range }) }}
+        </p>
+      </section>
+
+      <section class="mt-4 grid grid-cols-2 gap-3">
+        <div class="rounded-2xl bg-surface p-4 ring-1 ring-line">
+          <p class="text-xs font-semibold uppercase tracking-wide text-ink-soft">
+            {{ t('history.bestDay') }}
+          </p>
+          <p class="mt-1 text-sm font-semibold text-ink">
+            {{ bestDay ? formatDateKey(bestDay.date) : '—' }}
+          </p>
+          <p class="mt-1 text-xs text-ink-soft">
+            {{ bestDay ? formatVolume(bestDay.consumedMl) : t('history.noEntriesDay') }}
+          </p>
+        </div>
+        <div class="rounded-2xl bg-surface p-4 ring-1 ring-line">
+          <p class="text-xs font-semibold uppercase tracking-wide text-ink-soft">
+            {{ t('history.bestHour') }}
+          </p>
+          <p class="mt-1 text-sm font-semibold text-ink">
+            {{ bestHour ? `${bestHour.hour}:00` : '—' }}
+          </p>
+          <p class="mt-1 text-xs text-ink-soft">
+            {{ bestHour ? formatVolume(bestHour.totalMl) : t('history.noEntriesDay') }}
+          </p>
+        </div>
+      </section>
+
+      <section class="mt-4 rounded-2xl bg-surface p-4 ring-1 ring-line">
+        <div class="flex items-center justify-between gap-2">
+          <p class="text-xs font-semibold uppercase tracking-wide text-ink-soft">
+            {{ t('gamification.weeklyGoal') }}
+          </p>
+          <span class="rounded-full bg-teal/10 px-2.5 py-1 text-xs font-semibold text-teal-deep">
+            {{ store.weeklyReachedCount }}/{{ store.weeklyGoalTargetDays }}
+          </span>
+        </div>
+        <p class="mt-2 text-sm text-ink-soft">
+          {{ t('gamification.weeklyGoalHint', { rate: Math.round(store.weeklyGoalRate * 100) }) }}
+        </p>
+        <div v-if="badgeItems.length" class="mt-3 flex flex-wrap gap-2">
+          <span
+            v-for="badge in badgeItems"
+            :key="badge.id"
+            class="rounded-full bg-mist-deep px-3 py-1 text-xs font-semibold text-ink"
+            :title="badge.description"
+          >
+            {{ badge.label }}
+          </span>
         </div>
       </section>
 
