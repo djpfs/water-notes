@@ -21,31 +21,31 @@ const router = createRouter({
       path: '/onboarding',
       name: 'onboarding',
       component: () => import('@/views/OnboardingView.vue'),
-      meta: { requiresLogin: true, guestOnboard: true },
+      meta: { guestOnboard: true },
     },
     {
       path: '/meta',
       name: 'goal-reveal',
       component: () => import('@/views/GoalRevealView.vue'),
-      meta: { requiresLogin: true, requiresOnboard: true },
+      meta: { requiresOnboard: true },
     },
     {
       path: '/inicio',
       name: 'home',
       component: () => import('@/views/HomeView.vue'),
-      meta: { requiresLogin: true, requiresOnboard: true },
+      meta: { requiresOnboard: true },
     },
     {
       path: '/historico',
       name: 'history',
       component: () => import('@/views/HistoryView.vue'),
-      meta: { requiresLogin: true, requiresOnboard: true },
+      meta: { requiresOnboard: true },
     },
     {
       path: '/ajustes',
       name: 'settings',
       component: () => import('@/views/SettingsView.vue'),
-      meta: { requiresLogin: true, requiresOnboard: true },
+      meta: { requiresOnboard: true },
     },
   ],
 })
@@ -56,16 +56,15 @@ router.beforeEach(async (to) => {
   if (to.meta.public) return true
 
   const user = await fetchMe()
-  if (!user) {
+  if (user) {
+    store.applyGoogleAccount({
+      name: user.name,
+      email: user.email,
+      picture: user.picture,
+    })
+  } else {
     clearAuthCache()
-    return { name: 'login' }
   }
-
-  store.applyGoogleAccount({
-    name: user.name,
-    email: user.email,
-    picture: user.picture,
-  })
 
   if (to.meta.guestOnboard && store.profile.onboarded) {
     return { name: 'home' }

@@ -13,6 +13,7 @@ import {
   logoutRemote,
   pullAndMerge,
   pushLocal,
+  startGoogleLogin,
 } from '@/composables/useCloudSync'
 import {
   disableNotifications,
@@ -24,7 +25,18 @@ import {
 import { canUseRemotePush, testRemotePush } from '@/composables/useRemotePush'
 import { useToast } from '@/composables/useToast'
 import { useAppStore } from '@/stores/app'
-import { ML_PER_KG, NOTIFICATION_INTERVALS, APP_LOCALES, type AppLocale, type ThemeMode } from '@/types'
+import {
+  ACTIVITY_LEVELS,
+  APP_LOCALES,
+  HEAT_LEVELS,
+  ML_PER_KG,
+  NOTIFICATION_INTERVALS,
+  WEEKDAY_KEYS,
+  WEEKLY_GOAL_DAY_OPTIONS,
+  type AppLocale,
+  type ThemeMode,
+  type WeekdayKey,
+} from '@/types'
 import { formatVolume } from '@/utils/date'
 import { goBackOr } from '@/utils/navigation'
 import { formatClock, parseClock } from '@/utils/timeWindow'
@@ -51,6 +63,14 @@ const useCustomGoal = ref(store.profile.goalOverrideMl != null)
 const customGoal = ref(
   String(store.profile.goalOverrideMl ?? store.defaultGoalMl),
 )
+const activityLevel = ref(store.profile.activityLevel)
+const heatLevel = ref(store.profile.heatLevel)
+const climateAdjustment = ref(String(store.profile.climateAdjustmentMl ?? 0))
+const useWeekdayGoal = ref(store.profile.weekdayGoalMl != null)
+const weekdayGoal = ref(String(store.profile.weekdayGoalMl ?? store.dailyGoalMl))
+const useWeekendGoal = ref(store.profile.weekendGoalMl != null)
+const weekendGoal = ref(String(store.profile.weekendGoalMl ?? store.dailyGoalMl))
+const weeklyGoalDays = ref(String(store.profile.weeklyGoalDays ?? 5))
 const bedtime = ref(
   `${String(store.profile.bedtimeHour ?? 22).padStart(2, '0')}:${String(store.profile.bedtimeMinute ?? 0).padStart(2, '0')}`,
 )
@@ -71,6 +91,68 @@ const windowEnd = ref(
 const pauseWhenGoalReached = ref(
   store.notifications.pauseWhenGoalReached !== false,
 )
+const useWeekdayWindows = ref(store.notifications.useWeekdayWindows === true)
+const adaptiveEnabled = ref(store.notifications.adaptiveEnabled !== false)
+const weekdayWindowStart = ref<Record<WeekdayKey, string>>({
+  sun: formatClock(
+    store.notifications.weeklyWindows.sun.startHour,
+    store.notifications.weeklyWindows.sun.startMinute,
+  ),
+  mon: formatClock(
+    store.notifications.weeklyWindows.mon.startHour,
+    store.notifications.weeklyWindows.mon.startMinute,
+  ),
+  tue: formatClock(
+    store.notifications.weeklyWindows.tue.startHour,
+    store.notifications.weeklyWindows.tue.startMinute,
+  ),
+  wed: formatClock(
+    store.notifications.weeklyWindows.wed.startHour,
+    store.notifications.weeklyWindows.wed.startMinute,
+  ),
+  thu: formatClock(
+    store.notifications.weeklyWindows.thu.startHour,
+    store.notifications.weeklyWindows.thu.startMinute,
+  ),
+  fri: formatClock(
+    store.notifications.weeklyWindows.fri.startHour,
+    store.notifications.weeklyWindows.fri.startMinute,
+  ),
+  sat: formatClock(
+    store.notifications.weeklyWindows.sat.startHour,
+    store.notifications.weeklyWindows.sat.startMinute,
+  ),
+})
+const weekdayWindowEnd = ref<Record<WeekdayKey, string>>({
+  sun: formatClock(
+    store.notifications.weeklyWindows.sun.endHour,
+    store.notifications.weeklyWindows.sun.endMinute,
+  ),
+  mon: formatClock(
+    store.notifications.weeklyWindows.mon.endHour,
+    store.notifications.weeklyWindows.mon.endMinute,
+  ),
+  tue: formatClock(
+    store.notifications.weeklyWindows.tue.endHour,
+    store.notifications.weeklyWindows.tue.endMinute,
+  ),
+  wed: formatClock(
+    store.notifications.weeklyWindows.wed.endHour,
+    store.notifications.weeklyWindows.wed.endMinute,
+  ),
+  thu: formatClock(
+    store.notifications.weeklyWindows.thu.endHour,
+    store.notifications.weeklyWindows.thu.endMinute,
+  ),
+  fri: formatClock(
+    store.notifications.weeklyWindows.fri.endHour,
+    store.notifications.weeklyWindows.fri.endMinute,
+  ),
+  sat: formatClock(
+    store.notifications.weeklyWindows.sat.endHour,
+    store.notifications.weeklyWindows.sat.endMinute,
+  ),
+})
 const importConfirmOpen = ref(false)
 const pendingImport = ref<unknown>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -100,14 +182,52 @@ const customGoalNumber = computed(() => {
   return Number.isFinite(n) ? n : 0
 })
 
+const weekdayGoalNumber = computed(() => {
+  const n = Number(String(weekdayGoal.value).replace(',', '.'))
+  return Number.isFinite(n) ? n : 0
+})
+
+const weekendGoalNumber = computed(() => {
+  const n = Number(String(weekendGoal.value).replace(',', '.'))
+  return Number.isFinite(n) ? n : 0
+})
+
+const climateAdjustmentNumber = computed(() => {
+  const n = Number(String(climateAdjustment.value).replace(',', '.'))
+  return Number.isFinite(n) ? n : 0
+})
+
+const weeklyGoalDaysNumber = computed(() => {
+  const n = Number(String(weeklyGoalDays.value).replace(',', '.'))
+  return Number.isFinite(n) ? Math.round(n) : 5
+})
+
 const profileFieldsValid = computed(() => {
   if (nickname.value.trim().length < 2) return false
   return weightNumber.value >= 20 && weightNumber.value <= 300
 })
 
 const metaValid = computed(() => {
-  if (!useCustomGoal.value) return true
-  return customGoalNumber.value >= 500 && customGoalNumber.value <= 10000
+  const customGoalValid =
+    !useCustomGoal.value ||
+    (customGoalNumber.value >= 500 && customGoalNumber.value <= 10000)
+  const weekdayGoalValid =
+    !useWeekdayGoal.value ||
+    (weekdayGoalNumber.value >= 500 && weekdayGoalNumber.value <= 12000)
+  const weekendGoalValid =
+    !useWeekendGoal.value ||
+    (weekendGoalNumber.value >= 500 && weekendGoalNumber.value <= 12000)
+  const climateValid =
+    climateAdjustmentNumber.value >= -1200 && climateAdjustmentNumber.value <= 1200
+  const weeklyGoalDaysValid =
+    weeklyGoalDaysNumber.value >= 3 && weeklyGoalDaysNumber.value <= 7
+  return (
+    customGoalValid &&
+    weekdayGoalValid &&
+    weekendGoalValid &&
+    climateValid &&
+    weeklyGoalDaysValid
+  )
 })
 
 const themes = computed(() => [
@@ -115,6 +235,17 @@ const themes = computed(() => [
   { id: 'light' as ThemeMode, label: t('settings.themeLight') },
   { id: 'dark' as ThemeMode, label: t('settings.themeDark') },
 ])
+
+const activityOptions = ACTIVITY_LEVELS
+const heatOptions = HEAT_LEVELS
+const weeklyGoalDayOptions = WEEKLY_GOAL_DAY_OPTIONS
+
+const weekdayOptions = computed(() =>
+  WEEKDAY_KEYS.map((id) => ({
+    id,
+    label: t(`settings.weekday.${id}`),
+  })),
+)
 
 const sections = computed(() => [
   { id: 'conta', title: t('settings.account'), keywords: 'conta login google sync account' },
@@ -147,6 +278,51 @@ function show(id: string) {
   return visible.value.has(id)
 }
 
+function intervalOptionLabel(minutes: number): string {
+  const lang = locale.value
+  if (minutes % 60 === 0) {
+    const hours = minutes / 60
+    const unit =
+      lang === 'en'
+        ? `hour${hours === 1 ? '' : 's'}`
+        : `hora${hours === 1 ? '' : 's'}`
+    return t('settings.everyLabel', { value: `${hours} ${unit}` })
+  }
+  const hours = Math.floor(minutes / 60)
+  const mins = minutes % 60
+  if (hours === 0) {
+    return t('settings.everyLabel', { value: `${mins} min` })
+  }
+  const value = lang === 'en' ? `${hours}h ${mins}m` : `${hours}h ${mins}`
+  return t('settings.everyLabel', { value })
+}
+
+function updateWeekdayWindowInputsFromStore() {
+  for (const key of WEEKDAY_KEYS) {
+    const window = store.notifications.weeklyWindows[key]
+    weekdayWindowStart.value[key] = formatClock(window.startHour, window.startMinute)
+    weekdayWindowEnd.value[key] = formatClock(window.endHour, window.endMinute)
+  }
+}
+
+function buildWeeklyWindowsPayload() {
+  const next = {} as Record<
+    WeekdayKey,
+    { startHour: number; startMinute: number; endHour: number; endMinute: number }
+  >
+  for (const key of WEEKDAY_KEYS) {
+    const start = parseClock(weekdayWindowStart.value[key])
+    const end = parseClock(weekdayWindowEnd.value[key])
+    next[key] = {
+      startHour: start.hour,
+      startMinute: start.minute,
+      endHour: end.hour,
+      endMinute: end.minute,
+    }
+  }
+  return next
+}
+
 function parseBedtime(): { bedtimeHour: number; bedtimeMinute: number } {
   const [h, m] = bedtime.value.split(':').map(Number)
   return {
@@ -170,6 +346,12 @@ function saveMeta() {
   if (!metaValid.value) return
   store.updateProfile({
     goalOverrideMl: useCustomGoal.value ? customGoalNumber.value : null,
+    activityLevel: activityLevel.value,
+    heatLevel: heatLevel.value,
+    climateAdjustmentMl: climateAdjustmentNumber.value,
+    weekdayGoalMl: useWeekdayGoal.value ? weekdayGoalNumber.value : null,
+    weekendGoalMl: useWeekendGoal.value ? weekendGoalNumber.value : null,
+    weeklyGoalDays: weeklyGoalDaysNumber.value,
     ...parseBedtime(),
   })
   showToast(t('settings.goalSaved'))
@@ -241,7 +423,7 @@ function confirmDeleteCup() {
 
 const deletingCupLabel = computed(() => {
   const cup = store.cups.find((c) => c.id === deletingCupId.value)
-  return cup?.label ?? 'este copo'
+  return cup?.label ?? t('settings.deleteCupFallbackLabel')
 })
 
 async function toggleNotifications() {
@@ -254,7 +436,7 @@ async function toggleNotifications() {
       await enableNotifications()
     }
   } catch (err) {
-    notifError.value = err instanceof Error ? err.message : 'Não foi possível ativar.'
+    notifError.value = err instanceof Error ? err.message : t('settings.enableFailed')
   } finally {
     notifBusy.value = false
   }
@@ -272,9 +454,9 @@ async function onLogout() {
     await logoutRemote()
     clearAuthCache()
     cloudUser.value = null
-    await router.replace({ name: 'login' })
+    await router.replace({ name: 'home' })
   } catch (err) {
-    cloudError.value = err instanceof Error ? err.message : 'Falha ao sair.'
+    cloudError.value = err instanceof Error ? err.message : t('settings.logoutError')
   } finally {
     cloudBusy.value = false
   }
@@ -288,10 +470,10 @@ async function confirmDeleteAccount() {
     await deleteAccountRemote()
     store.resetAll()
     cloudUser.value = null
-    await router.replace({ name: 'login' })
+    await router.replace({ name: 'onboarding' })
   } catch (err) {
     cloudError.value =
-      err instanceof Error ? err.message : 'Não foi possível excluir a conta.'
+      err instanceof Error ? err.message : t('settings.deleteAccountError')
   } finally {
     cloudBusy.value = false
   }
@@ -305,12 +487,12 @@ async function onSyncNow() {
     const result = await pullAndMerge()
     cloudMsg.value =
       result === 'pulled'
-        ? 'Dados restaurados.'
+        ? t('settings.syncPulled')
         : result === 'empty'
-          ? 'Nada na nuvem — enviamos seus dados.'
-          : 'Tudo sincronizado.'
+          ? t('settings.syncEmpty')
+          : t('settings.syncMerged')
   } catch (err) {
-    cloudError.value = err instanceof Error ? err.message : 'Não foi possível sincronizar.'
+    cloudError.value = err instanceof Error ? err.message : t('settings.syncError')
   } finally {
     cloudBusy.value = false
   }
@@ -321,9 +503,9 @@ async function onPushOnly() {
   cloudError.value = ''
   try {
     await pushLocal()
-    cloudMsg.value = 'Backup enviado.'
+    cloudMsg.value = t('settings.backupUploaded')
   } catch (err) {
-    cloudError.value = err instanceof Error ? err.message : 'Falha ao enviar.'
+    cloudError.value = err instanceof Error ? err.message : t('settings.uploadError')
   } finally {
     cloudBusy.value = false
   }
@@ -331,6 +513,7 @@ async function onPushOnly() {
 
 onMounted(async () => {
   cloudUser.value = await fetchMe(true)
+  updateWeekdayWindowInputsFromStore()
 })
 
 async function saveReminderWindow() {
@@ -341,8 +524,12 @@ async function saveReminderWindow() {
     windowStartMinute: start.minute,
     windowEndHour: end.hour,
     windowEndMinute: end.minute,
+    useWeekdayWindows: useWeekdayWindows.value,
+    weeklyWindows: buildWeeklyWindowsPayload(),
+    adaptiveEnabled: adaptiveEnabled.value,
     pauseWhenGoalReached: pauseWhenGoalReached.value,
   })
+  updateWeekdayWindowInputsFromStore()
   showToast(t('settings.remindersSaved'))
 }
 
@@ -354,7 +541,7 @@ async function onTestNotification() {
     showToast(t('settings.testSent'))
   } catch (err) {
     notifError.value =
-      err instanceof Error ? err.message : 'Falha ao testar notificação.'
+      err instanceof Error ? err.message : t('settings.reminderTestFailed')
   } finally {
     notifBusy.value = false
   }
@@ -384,7 +571,27 @@ function applyImport(data: unknown) {
   customGoal.value = String(
     store.profile.goalOverrideMl ?? store.defaultGoalMl,
   )
+  activityLevel.value = store.profile.activityLevel
+  heatLevel.value = store.profile.heatLevel
+  climateAdjustment.value = String(store.profile.climateAdjustmentMl ?? 0)
+  useWeekdayGoal.value = store.profile.weekdayGoalMl != null
+  weekdayGoal.value = String(store.profile.weekdayGoalMl ?? store.dailyGoalMl)
+  useWeekendGoal.value = store.profile.weekendGoalMl != null
+  weekendGoal.value = String(store.profile.weekendGoalMl ?? store.dailyGoalMl)
+  weeklyGoalDays.value = String(store.profile.weeklyGoalDays ?? 5)
   bedtime.value = `${String(store.profile.bedtimeHour).padStart(2, '0')}:${String(store.profile.bedtimeMinute).padStart(2, '0')}`
+  windowStart.value = formatClock(
+    store.notifications.windowStartHour,
+    store.notifications.windowStartMinute,
+  )
+  windowEnd.value = formatClock(
+    store.notifications.windowEndHour,
+    store.notifications.windowEndMinute,
+  )
+  useWeekdayWindows.value = store.notifications.useWeekdayWindows === true
+  adaptiveEnabled.value = store.notifications.adaptiveEnabled !== false
+  pauseWhenGoalReached.value = store.notifications.pauseWhenGoalReached !== false
+  updateWeekdayWindowInputsFromStore()
   feedbackSound.value = store.feedback.sound
   feedbackHaptic.value = store.feedback.haptic
   locale.value = store.locale
@@ -406,7 +613,7 @@ async function onImportFile(event: Event) {
     importConfirmOpen.value = true
   } catch (err) {
     showToast(
-      err instanceof Error ? err.message : 'Falha ao importar backup.',
+      err instanceof Error ? err.message : t('settings.importFailed'),
     )
   } finally {
     input.value = ''
@@ -421,7 +628,7 @@ async function onImportFile(event: Event) {
         <button
           type="button"
           class="flex h-11 w-11 items-center justify-center rounded-xl bg-mist-deep text-ink"
-          aria-label="Voltar"
+          :aria-label="t('common.back')"
           @click="goBackOr(router, { name: 'home' })"
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -434,7 +641,7 @@ async function onImportFile(event: Event) {
             />
           </svg>
         </button>
-        <h1 class="font-display text-2xl font-bold text-ink">Ajustes</h1>
+        <h1 class="font-display text-2xl font-bold text-ink">{{ t('settings.title') }}</h1>
       </header>
 
       <div class="relative mt-4">
@@ -452,7 +659,7 @@ async function onImportFile(event: Event) {
         <input
           v-model="search"
           type="search"
-          placeholder="Buscar"
+          :placeholder="t('settings.searchPlaceholder')"
           class="h-11 w-full rounded-xl bg-mist-deep pl-10 pr-4 text-sm text-ink outline-none placeholder:text-ink-soft focus:ring-2 focus:ring-teal"
         />
       </div>
@@ -462,12 +669,12 @@ async function onImportFile(event: Event) {
       v-if="search.trim() && visible.size === 0"
       class="mt-8 text-center text-sm text-ink-soft"
     >
-      Nada encontrado.
+      {{ t('common.nothingFound') }}
     </p>
 
     <section v-if="show('conta')" class="mt-6">
       <h2 class="mb-2 px-1 text-[13px] font-semibold uppercase tracking-wide text-ink-soft">
-        Conta
+        {{ t('settings.account') }}
       </h2>
       <div class="overflow-hidden rounded-2xl bg-surface ring-1 ring-line">
         <div v-if="cloudUser" class="divide-y divide-line">
@@ -481,7 +688,7 @@ async function onImportFile(event: Event) {
             />
             <div class="min-w-0">
               <p class="truncate font-semibold text-ink">
-                {{ cloudUser.name || store.profile.nickname || 'Conta' }}
+                {{ cloudUser.name || store.profile.nickname || t('settings.accountFallbackName') }}
               </p>
               <p class="truncate text-xs text-ink-soft">{{ cloudUser.email }}</p>
             </div>
@@ -492,7 +699,7 @@ async function onImportFile(event: Event) {
             :disabled="cloudBusy"
             @click="onSyncNow"
           >
-            Sincronizar agora
+            {{ t('settings.syncNow') }}
           </button>
           <button
             type="button"
@@ -500,7 +707,7 @@ async function onImportFile(event: Event) {
             :disabled="cloudBusy"
             @click="onPushOnly"
           >
-            Enviar só deste aparelho
+            {{ t('settings.pushOnly') }}
           </button>
           <button
             type="button"
@@ -508,7 +715,7 @@ async function onImportFile(event: Event) {
             :disabled="cloudBusy"
             @click="onLogout"
           >
-            Sair
+            {{ t('settings.logout') }}
           </button>
           <button
             type="button"
@@ -516,12 +723,20 @@ async function onImportFile(event: Event) {
             :disabled="cloudBusy"
             @click="accountDeleteOpen = true"
           >
-            Excluir conta
+            {{ t('settings.deleteAccount') }}
           </button>
         </div>
         <p v-else class="px-4 py-3 text-sm text-ink-soft">
-          Entre na tela inicial para sincronizar entre aparelhos.
+          {{ t('settings.goToLoginForSync') }}
         </p>
+        <button
+          v-if="!cloudUser"
+          type="button"
+          class="flex h-12 w-full items-center border-t border-line px-4 text-left text-sm font-medium text-teal"
+          @click="startGoogleLogin"
+        >
+          {{ t('login.continueGoogle') }}
+        </button>
       </div>
       <p v-if="cloudError" class="mt-2 px-1 text-sm text-amber-deep">{{ cloudError }}</p>
       <p v-if="cloudMsg" class="mt-2 px-1 text-sm text-teal-deep">{{ cloudMsg }}</p>
@@ -529,11 +744,11 @@ async function onImportFile(event: Event) {
 
     <section v-if="show('perfil')" class="mt-7">
       <h2 class="mb-2 px-1 text-[13px] font-semibold uppercase tracking-wide text-ink-soft">
-        Perfil
+        {{ t('settings.profile') }}
       </h2>
       <div class="space-y-0 overflow-hidden rounded-2xl bg-surface ring-1 ring-line">
         <label class="block border-b border-line px-4 py-3">
-          <span class="mb-1.5 block text-xs text-ink-soft">Apelido</span>
+          <span class="mb-1.5 block text-xs text-ink-soft">{{ t('settings.nickname') }}</span>
           <input
             v-model="nickname"
             type="text"
@@ -542,7 +757,7 @@ async function onImportFile(event: Event) {
           />
         </label>
         <label class="block border-b border-line px-4 py-3">
-          <span class="mb-1.5 block text-xs text-ink-soft">Peso (kg)</span>
+          <span class="mb-1.5 block text-xs text-ink-soft">{{ t('settings.weight') }}</span>
           <input
             v-model="weightKg"
             type="number"
@@ -554,7 +769,7 @@ async function onImportFile(event: Event) {
           />
         </label>
         <div class="px-4 py-3">
-          <p class="mb-2 text-xs text-ink-soft">Avatar</p>
+          <p class="mb-2 text-xs text-ink-soft">{{ t('settings.avatar') }}</p>
           <AvatarPicker
             v-model="avatarId"
             v-model:use-photo="useProfilePhoto"
@@ -568,17 +783,17 @@ async function onImportFile(event: Event) {
         :disabled="!profileFieldsValid"
         @click="saveProfileFields"
       >
-        Salvar perfil
+        {{ t('settings.saveProfile') }}
       </button>
     </section>
 
     <section v-if="show('meta')" class="mt-7">
       <h2 class="mb-2 px-1 text-[13px] font-semibold uppercase tracking-wide text-ink-soft">
-        Meta
+        {{ t('settings.goal') }}
       </h2>
       <div class="overflow-hidden rounded-2xl bg-surface ring-1 ring-line">
         <p class="border-b border-line px-4 py-3 text-sm text-ink-soft">
-          Sugestão: {{ formatVolume(suggestedGoal) }}
+          {{ t('settings.suggestedGoal', { amount: formatVolume(suggestedGoal) }) }}
         </p>
         <label class="flex items-center gap-3 border-b border-line px-4 py-3">
           <input
@@ -586,10 +801,10 @@ async function onImportFile(event: Event) {
             type="checkbox"
             class="size-5 accent-[oklch(0.48_0.10_238)]"
           />
-          <span class="text-sm font-medium text-ink">Meta manual</span>
+          <span class="text-sm font-medium text-ink">{{ t('settings.manualGoal') }}</span>
         </label>
         <label v-if="useCustomGoal" class="block border-b border-line px-4 py-3">
-          <span class="mb-1.5 block text-xs text-ink-soft">Meta (ml)</span>
+          <span class="mb-1.5 block text-xs text-ink-soft">{{ t('settings.goalMl') }}</span>
           <input
             v-model="customGoal"
             type="number"
@@ -600,14 +815,103 @@ async function onImportFile(event: Event) {
             class="w-full bg-transparent font-display text-xl font-bold text-ink outline-none"
           />
         </label>
+        <label class="block border-b border-line px-4 py-3">
+          <span class="mb-1.5 block text-xs text-ink-soft">{{ t('settings.activityLevel') }}</span>
+          <select v-model="activityLevel" class="w-full bg-transparent text-ink outline-none">
+            <option
+              v-for="item in activityOptions"
+              :key="item.id"
+              :value="item.id"
+            >
+              {{ t(item.labelKey) }}
+            </option>
+          </select>
+        </label>
+        <label class="block border-b border-line px-4 py-3">
+          <span class="mb-1.5 block text-xs text-ink-soft">{{ t('settings.heatLevel') }}</span>
+          <select v-model="heatLevel" class="w-full bg-transparent text-ink outline-none">
+            <option
+              v-for="item in heatOptions"
+              :key="item.id"
+              :value="item.id"
+            >
+              {{ t(item.labelKey) }}
+            </option>
+          </select>
+        </label>
+        <label class="block border-b border-line px-4 py-3">
+          <span class="mb-1.5 block text-xs text-ink-soft">{{ t('settings.climateAdjustment') }}</span>
+          <input
+            v-model="climateAdjustment"
+            type="number"
+            inputmode="numeric"
+            min="-1200"
+            max="1200"
+            step="50"
+            class="w-full bg-transparent text-ink outline-none"
+          />
+          <p class="mt-1 text-xs text-ink-soft">{{ t('settings.climateAdjustmentHint') }}</p>
+        </label>
+        <label class="flex items-center gap-3 border-b border-line px-4 py-3">
+          <input
+            v-model="useWeekdayGoal"
+            type="checkbox"
+            class="size-5 accent-[oklch(0.48_0.10_238)]"
+          />
+          <span class="text-sm font-medium text-ink">{{ t('settings.weekdayGoalToggle') }}</span>
+        </label>
+        <label v-if="useWeekdayGoal" class="block border-b border-line px-4 py-3">
+          <span class="mb-1.5 block text-xs text-ink-soft">{{ t('settings.weekdayGoalLabel') }}</span>
+          <input
+            v-model="weekdayGoal"
+            type="number"
+            inputmode="numeric"
+            min="500"
+            max="12000"
+            step="50"
+            class="w-full bg-transparent text-ink outline-none"
+          />
+        </label>
+        <label class="flex items-center gap-3 border-b border-line px-4 py-3">
+          <input
+            v-model="useWeekendGoal"
+            type="checkbox"
+            class="size-5 accent-[oklch(0.48_0.10_238)]"
+          />
+          <span class="text-sm font-medium text-ink">{{ t('settings.weekendGoalToggle') }}</span>
+        </label>
+        <label v-if="useWeekendGoal" class="block border-b border-line px-4 py-3">
+          <span class="mb-1.5 block text-xs text-ink-soft">{{ t('settings.weekendGoalLabel') }}</span>
+          <input
+            v-model="weekendGoal"
+            type="number"
+            inputmode="numeric"
+            min="500"
+            max="12000"
+            step="50"
+            class="w-full bg-transparent text-ink outline-none"
+          />
+        </label>
+        <label class="block border-b border-line px-4 py-3">
+          <span class="mb-1.5 block text-xs text-ink-soft">{{ t('settings.weeklyGoalDays') }}</span>
+          <select v-model="weeklyGoalDays" class="w-full bg-transparent text-ink outline-none">
+            <option
+              v-for="dayCount in weeklyGoalDayOptions"
+              :key="dayCount"
+              :value="String(dayCount)"
+            >
+              {{ t('settings.weeklyGoalDaysOption', { days: dayCount }) }}
+            </option>
+          </select>
+        </label>
         <label class="block px-4 py-3">
-          <span class="mb-1.5 block text-xs text-ink-soft">Horário de dormir</span>
+          <span class="mb-1.5 block text-xs text-ink-soft">{{ t('settings.bedtime') }}</span>
           <input
             v-model="bedtime"
             type="time"
             class="w-full bg-transparent text-ink outline-none"
           />
-          <p class="mt-1 text-xs text-ink-soft">Para sugerir o próximo gole.</p>
+          <p class="mt-1 text-xs text-ink-soft">{{ t('settings.bedtimeHint') }}</p>
         </label>
       </div>
       <button
@@ -616,13 +920,13 @@ async function onImportFile(event: Event) {
         :disabled="!metaValid"
         @click="saveMeta"
       >
-        Salvar meta
+        {{ t('settings.saveGoal') }}
       </button>
     </section>
 
     <section v-if="show('lembretes')" class="mt-7">
       <h2 class="mb-2 px-1 text-[13px] font-semibold uppercase tracking-wide text-ink-soft">
-        Lembretes
+        {{ t('settings.reminders') }}
       </h2>
       <div class="overflow-hidden rounded-2xl bg-surface ring-1 ring-line">
         <button
@@ -631,7 +935,7 @@ async function onImportFile(event: Event) {
           :disabled="notifBusy"
           @click="toggleNotifications"
         >
-          <span>Ativar lembretes</span>
+          <span>{{ t('settings.remindersToggle') }}</span>
           <span
             class="rounded-full px-2.5 py-0.5 text-xs font-semibold"
             :class="
@@ -640,13 +944,13 @@ async function onImportFile(event: Event) {
                 : 'bg-mist-deep text-ink-soft'
             "
           >
-            {{ store.notifications.enabled ? 'On' : 'Off' }}
+            {{ store.notifications.enabled ? t('common.on') : t('common.off') }}
           </span>
         </button>
 
         <template v-if="store.notifications.enabled">
           <label class="block border-t border-line px-4 py-3">
-            <span class="mb-1.5 block text-xs text-ink-soft">Intervalo</span>
+            <span class="mb-1.5 block text-xs text-ink-soft">{{ t('settings.interval') }}</span>
             <select
               class="w-full bg-transparent text-ink outline-none"
               :value="store.notifications.intervalMinutes"
@@ -657,13 +961,13 @@ async function onImportFile(event: Event) {
                 :key="item.minutes"
                 :value="item.minutes"
               >
-                A cada {{ item.label }}
+                {{ intervalOptionLabel(item.minutes) }}
               </option>
             </select>
           </label>
           <div class="grid grid-cols-2 gap-0 border-t border-line">
             <label class="border-r border-line px-4 py-3">
-              <span class="mb-1.5 block text-xs text-ink-soft">Das</span>
+              <span class="mb-1.5 block text-xs text-ink-soft">{{ t('settings.from') }}</span>
               <input
                 v-model="windowStart"
                 type="time"
@@ -671,7 +975,7 @@ async function onImportFile(event: Event) {
               />
             </label>
             <label class="px-4 py-3">
-              <span class="mb-1.5 block text-xs text-ink-soft">Até</span>
+              <span class="mb-1.5 block text-xs text-ink-soft">{{ t('settings.to') }}</span>
               <input
                 v-model="windowEnd"
                 type="time"
@@ -681,18 +985,56 @@ async function onImportFile(event: Event) {
           </div>
           <label class="flex items-center gap-3 border-t border-line px-4 py-3">
             <input
+              v-model="useWeekdayWindows"
+              type="checkbox"
+              class="size-5 accent-[oklch(0.48_0.10_238)]"
+            />
+            <span class="text-sm font-medium text-ink">{{ t('settings.weekdayWindowsToggle') }}</span>
+          </label>
+          <div
+            v-if="useWeekdayWindows"
+            class="divide-y divide-line border-t border-line"
+          >
+            <div
+              v-for="item in weekdayOptions"
+              :key="item.id"
+              class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] gap-2 px-4 py-3"
+            >
+              <p class="text-sm font-medium text-ink">{{ item.label }}</p>
+              <input
+                v-model="weekdayWindowStart[item.id]"
+                type="time"
+                class="w-full rounded-lg bg-mist-deep px-2 py-1.5 text-sm text-ink outline-none"
+              />
+              <input
+                v-model="weekdayWindowEnd[item.id]"
+                type="time"
+                class="w-full rounded-lg bg-mist-deep px-2 py-1.5 text-sm text-ink outline-none"
+              />
+            </div>
+          </div>
+          <label class="flex items-center gap-3 border-t border-line px-4 py-3">
+            <input
+              v-model="adaptiveEnabled"
+              type="checkbox"
+              class="size-5 accent-[oklch(0.48_0.10_238)]"
+            />
+            <span class="text-sm font-medium text-ink">{{ t('settings.adaptiveReminders') }}</span>
+          </label>
+          <label class="flex items-center gap-3 border-t border-line px-4 py-3">
+            <input
               v-model="pauseWhenGoalReached"
               type="checkbox"
               class="size-5 accent-[oklch(0.48_0.10_238)]"
             />
-            <span class="text-sm font-medium text-ink">Pausar se a meta já foi batida</span>
+            <span class="text-sm font-medium text-ink">{{ t('settings.pauseWhenGoal') }}</span>
           </label>
           <button
             type="button"
             class="flex h-12 w-full items-center border-t border-line px-4 text-left text-sm font-medium text-ink"
             @click="saveReminderWindow"
           >
-            Salvar lembretes
+            {{ t('settings.saveReminders') }}
           </button>
         </template>
         <button
@@ -723,7 +1065,7 @@ async function onImportFile(event: Event) {
 
     <section v-if="show('aparencia')" class="mt-7">
       <h2 class="mb-2 px-1 text-[13px] font-semibold uppercase tracking-wide text-ink-soft">
-        Aparência
+        {{ t('settings.appearance') }}
       </h2>
       <div class="flex overflow-hidden rounded-2xl bg-surface ring-1 ring-line">
         <button
@@ -745,7 +1087,7 @@ async function onImportFile(event: Event) {
 
     <section v-if="show('feedback')" class="mt-7">
       <h2 class="mb-2 px-1 text-[13px] font-semibold uppercase tracking-wide text-ink-soft">
-        Feedback
+        {{ t('settings.feedback') }}
       </h2>
       <div class="overflow-hidden rounded-2xl bg-surface ring-1 ring-line">
         <label class="flex items-center gap-3 border-b border-line px-4 py-3">
@@ -754,7 +1096,7 @@ async function onImportFile(event: Event) {
             type="checkbox"
             class="size-5 accent-[oklch(0.48_0.10_238)]"
           />
-          <span class="text-sm font-medium text-ink">Sons ao registrar</span>
+          <span class="text-sm font-medium text-ink">{{ t('settings.soundOnRegister') }}</span>
         </label>
         <label class="flex items-center gap-3 px-4 py-3">
           <input
@@ -762,7 +1104,7 @@ async function onImportFile(event: Event) {
             type="checkbox"
             class="size-5 accent-[oklch(0.48_0.10_238)]"
           />
-          <span class="text-sm font-medium text-ink">Vibração / toque nos botões</span>
+          <span class="text-sm font-medium text-ink">{{ t('settings.hapticButtons') }}</span>
         </label>
       </div>
       <button
@@ -770,7 +1112,7 @@ async function onImportFile(event: Event) {
         class="mt-3 h-11 w-full rounded-2xl bg-teal text-sm font-semibold text-surface-raised"
         @click="saveFeedback"
       >
-        Salvar feedback
+        {{ t('settings.saveFeedback') }}
       </button>
     </section>
 
@@ -799,15 +1141,15 @@ async function onImportFile(event: Event) {
 
     <section v-if="show('copos')" class="mt-7">
       <h2 class="mb-2 px-1 text-[13px] font-semibold uppercase tracking-wide text-ink-soft">
-        Copos
+        {{ t('settings.cups') }}
       </h2>
       <div class="overflow-hidden rounded-2xl bg-surface ring-1 ring-line">
         <div class="flex items-center justify-between border-b border-line px-4 py-3">
-          <p class="text-sm font-semibold text-ink">Atalhos</p>
+          <p class="text-sm font-semibold text-ink">{{ t('settings.shortcuts') }}</p>
           <button
             type="button"
             class="flex h-9 w-9 items-center justify-center rounded-xl bg-teal text-surface-raised"
-            aria-label="Adicionar copo"
+            :aria-label="t('settings.addCup')"
             @click="openAddCup"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -836,7 +1178,7 @@ async function onImportFile(event: Event) {
                 class="h-10 rounded-xl px-3 text-sm font-medium text-teal"
                 @click="openEditCup(cup.id, cup.label, cup.ml)"
               >
-                Editar
+                {{ t('common.edit') }}
               </button>
               <button
                 type="button"
@@ -844,7 +1186,7 @@ async function onImportFile(event: Event) {
                 :disabled="store.cups.length <= 1"
                 @click="askDeleteCup(cup.id)"
               >
-                Excluir
+                {{ t('common.delete') }}
               </button>
             </div>
           </li>
@@ -860,16 +1202,16 @@ async function onImportFile(event: Event) {
       />
       <ConfirmSheet
         v-model:open="deleteConfirmOpen"
-        title="Excluir copo?"
-        :message="`Remover ${deletingCupLabel} dos atalhos?`"
-        confirm-label="Excluir"
+        :title="t('settings.deleteCupTitle')"
+        :message="t('settings.deleteCupMessage', { label: deletingCupLabel })"
+        :confirm-label="t('common.delete')"
         @confirm="confirmDeleteCup"
       />
     </section>
 
     <section v-if="show('dados')" class="mt-7">
       <h2 class="mb-2 px-1 text-[13px] font-semibold uppercase tracking-wide text-ink-soft">
-        Dados
+        {{ t('settings.data') }}
       </h2>
       <div class="overflow-hidden rounded-2xl bg-surface ring-1 ring-line">
         <button
@@ -877,14 +1219,14 @@ async function onImportFile(event: Event) {
           class="flex h-12 w-full items-center border-b border-line px-4 text-left text-sm font-medium text-ink"
           @click="exportBackup"
         >
-          Exportar backup
+          {{ t('settings.exportBackup') }}
         </button>
         <button
           type="button"
           class="flex h-12 w-full items-center px-4 text-left text-sm font-medium text-ink"
           @click="fileInput?.click()"
         >
-          Importar backup
+          {{ t('settings.importBackup') }}
         </button>
       </div>
       <input
@@ -898,27 +1240,27 @@ async function onImportFile(event: Event) {
 
     <section v-if="show('sobre')" class="mt-7">
       <h2 class="mb-2 px-1 text-[13px] font-semibold uppercase tracking-wide text-ink-soft">
-        Sobre
+        {{ t('settings.about') }}
       </h2>
       <div class="rounded-2xl bg-surface px-4 py-3 ring-1 ring-line">
         <p class="text-sm text-ink">Water Notes</p>
-        <p class="text-xs text-ink-soft">Versão {{ APP_VERSION }}</p>
+        <p class="text-xs text-ink-soft">{{ t('settings.version', { version: APP_VERSION }) }}</p>
       </div>
     </section>
   </main>
 
   <ConfirmSheet
     v-model:open="accountDeleteOpen"
-    title="Excluir conta?"
-    message="Apaga sua conta, dados na nuvem e registros neste aparelho. Esta ação não pode ser desfeita."
-    confirm-label="Excluir conta"
+    :title="t('settings.deleteAccountTitle')"
+    :message="t('settings.deleteAccountMessage')"
+    :confirm-label="t('settings.deleteAccountConfirm')"
     @confirm="confirmDeleteAccount"
   />
   <ConfirmSheet
     v-model:open="importConfirmOpen"
-    title="Importar backup?"
-    message="Isso substitui todos os dados locais (perfil, copos e lançamentos)."
-    confirm-label="Importar"
+    :title="t('settings.importTitle')"
+    :message="t('settings.importMessage')"
+    :confirm-label="t('settings.importConfirm')"
     @confirm="confirmImport"
   />
 </template>

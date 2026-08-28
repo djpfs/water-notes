@@ -6,7 +6,7 @@ import {
   unsubscribeRemotePush,
 } from '@/composables/useRemotePush'
 import { useAppStore } from '@/stores/app'
-import type { NotificationSettings } from '@/types'
+import { WEEKDAY_KEYS, type AppLocale, type NotificationSettings, type WeeklyReminderWindows } from '@/types'
 
 export type ReminderPayload = {
   type: 'SET_REMINDERS'
@@ -18,11 +18,16 @@ export type ReminderPayload = {
   | 'windowStartMinute'
   | 'windowEndHour'
   | 'windowEndMinute'
+  | 'useWeekdayWindows'
+  | 'weeklyWindows'
+  | 'adaptiveEnabled'
   | 'pauseWhenGoalReached'
 > & {
+  locale: AppLocale
   nickname: string
   remainingMl: number
   goalReached: boolean
+  lastEntryAt: string | null
 }
 
 const PERIODIC_TAG = 'water-reminder'
@@ -30,6 +35,21 @@ const PERIODIC_MIN_MS = 12 * 60 * 60 * 1000
 
 function buildPayload(store: ReturnType<typeof useAppStore>): ReminderPayload {
   const n = store.notifications
+  const fallbackNickname = store.locale === 'en' ? 'there' : 'você'
+  const weeklyWindows = WEEKDAY_KEYS.reduce((acc, key) => {
+    const day = n.weeklyWindows[key]
+    acc[key] = {
+      startHour: day.startHour,
+      startMinute: day.startMinute,
+      endHour: day.endHour,
+      endMinute: day.endMinute,
+    }
+    return acc
+  }, {} as WeeklyReminderWindows)
+  const latestEntryAt =
+    store.entries
+      .map((entry) => entry.at)
+      .sort((a, b) => (a < b ? 1 : -1))[0] ?? null
   return {
     type: 'SET_REMINDERS',
     enabled: n.enabled,
@@ -38,10 +58,15 @@ function buildPayload(store: ReturnType<typeof useAppStore>): ReminderPayload {
     windowStartMinute: n.windowStartMinute,
     windowEndHour: n.windowEndHour,
     windowEndMinute: n.windowEndMinute,
+    useWeekdayWindows: n.useWeekdayWindows,
+    weeklyWindows,
+    adaptiveEnabled: n.adaptiveEnabled,
     pauseWhenGoalReached: n.pauseWhenGoalReached,
-    nickname: store.profile.nickname || 'você',
+    locale: store.locale,
+    nickname: store.profile.nickname || fallbackNickname,
     remainingMl: store.remainingMl,
     goalReached: store.goalReached,
+    lastEntryAt: latestEntryAt,
   }
 }
 
@@ -151,10 +176,15 @@ function onSwMessage(event: MessageEvent) {
     windowStartMinute: payload.windowStartMinute,
     windowEndHour: payload.windowEndHour,
     windowEndMinute: payload.windowEndMinute,
+    useWeekdayWindows: payload.useWeekdayWindows,
+    weeklyWindows: payload.weeklyWindows,
+    adaptiveEnabled: payload.adaptiveEnabled,
     pauseWhenGoalReached: payload.pauseWhenGoalReached,
+    locale: payload.locale,
     nickname: payload.nickname,
     remainingMl: payload.remainingMl,
     goalReached: payload.goalReached,
+    lastEntryAt: payload.lastEntryAt,
   })
   void postToSw(payload)
 }
@@ -185,10 +215,16 @@ export function useNotifications() {
       store.notifications.windowStartMinute,
       store.notifications.windowEndHour,
       store.notifications.windowEndMinute,
+      store.notifications.useWeekdayWindows,
+      store.notifications.weeklyWindows,
+      store.notifications.adaptiveEnabled,
       store.notifications.pauseWhenGoalReached,
       store.remainingMl,
       store.goalReached,
       store.profile.nickname,
+      store.locale,
+      store.entries.length,
+      store.entries[store.entries.length - 1]?.at ?? '',
     ],
     () => {
       void syncReminders()

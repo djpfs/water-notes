@@ -16,6 +16,7 @@ export type SyncPayload = {
   theme: unknown
   notifications: unknown
   feedback?: unknown
+  locale?: unknown
   celebratedDate: string | null
   installDismissedAt: string | null
   lastActiveDate: string | null

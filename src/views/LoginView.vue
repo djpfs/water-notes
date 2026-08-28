@@ -17,6 +17,13 @@ const { t } = useI18n()
 const busy = ref(true)
 const error = ref('')
 
+async function continueAsGuest() {
+  if (!store.profile.onboarded) {
+    store.skipOnboarding()
+  }
+  await router.replace({ name: 'home' })
+}
+
 async function finishAuthFlow() {
   const user = await fetchMe(true)
   if (!user) {
@@ -92,10 +99,10 @@ onMounted(async () => {
       </div>
       <h1 class="font-display text-3xl font-bold text-ink">Water Notes</h1>
       <p class="mt-2 max-w-xs text-sm text-ink-soft">
-        Entre para salvar seu progresso e continuar de onde parou em qualquer aparelho.
+        {{ t('login.subtitle') }}
       </p>
 
-      <p v-if="busy" class="mt-8 text-sm text-ink-soft">Carregando…</p>
+      <p v-if="busy" class="mt-8 text-sm text-ink-soft">{{ t('common.loading') }}</p>
 
       <template v-else>
         <button
@@ -121,7 +128,14 @@ onMounted(async () => {
               d="M43.6 20.1H42V20H24v8h11.3c-1.1 3.1-3.5 5.5-6.5 6.6l6.2 5.2C38.5 36.6 44 31 44 24c0-1.3-.1-2.7-.4-3.9z"
             />
           </svg>
-          Continuar com Google
+          {{ t('login.continueGoogle') }}
+        </button>
+        <button
+          type="button"
+          class="mt-3 h-11 w-full max-w-sm rounded-2xl bg-mist-deep text-sm font-semibold text-ink"
+          @click="continueAsGuest"
+        >
+          {{ t('login.continueGuest') }}
         </button>
         <p v-if="error" class="mt-4 text-sm text-amber-deep">{{ error }}</p>
       </template>

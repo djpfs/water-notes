@@ -7,6 +7,7 @@ import {
   pruneEntriesBefore,
   pruneSnapshotsBefore,
   resolveDailyGoalMl,
+  resolveGoalForDate,
 } from '@/utils/storeLogic'
 
 describe('resolveDailyGoalMl', () => {
@@ -16,6 +17,52 @@ describe('resolveDailyGoalMl', () => {
 
   it('uses override when set', () => {
     expect(resolveDailyGoalMl(70, 2000)).toBe(2000)
+  })
+})
+
+describe('resolveGoalForDate', () => {
+  const profileBase = {
+    weightKg: 70,
+    goalOverrideMl: null,
+    activityLevel: 'moderate' as const,
+    heatLevel: 'mild' as const,
+    climateAdjustmentMl: 0,
+    weekdayGoalMl: null,
+    weekendGoalMl: null,
+  }
+
+  it('adds profile adjustments to default goal', () => {
+    expect(
+      resolveGoalForDate({
+        ...profileBase,
+        activityLevel: 'high',
+        heatLevel: 'hot',
+        climateAdjustmentMl: 100,
+      }, '2026-08-26'),
+    ).toBe(3450)
+  })
+
+  it('uses weekday/weekend custom goals when defined', () => {
+    expect(
+      resolveGoalForDate(
+        {
+          ...profileBase,
+          weekdayGoalMl: 2300,
+          weekendGoalMl: 1900,
+        },
+        '2026-08-26',
+      ),
+    ).toBe(2300)
+    expect(
+      resolveGoalForDate(
+        {
+          ...profileBase,
+          weekdayGoalMl: 2300,
+          weekendGoalMl: 1900,
+        },
+        '2026-08-30',
+      ),
+    ).toBe(1900)
   })
 })
 

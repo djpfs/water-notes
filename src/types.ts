@@ -5,6 +5,12 @@ export interface Profile {
   onboarded: boolean
   /** null = peso × 35 */
   goalOverrideMl: number | null
+  activityLevel: ActivityLevel
+  heatLevel: HeatLevel
+  climateAdjustmentMl: number
+  weekdayGoalMl: number | null
+  weekendGoalMl: number | null
+  weeklyGoalDays: number
   bedtimeHour: number
   bedtimeMinute: number
   email: string | null
@@ -25,6 +31,16 @@ export interface WaterEntry {
 }
 
 export type ThemeMode = 'system' | 'light' | 'dark'
+export type ActivityLevel = 'low' | 'moderate' | 'high'
+export type HeatLevel = 'mild' | 'warm' | 'hot'
+export type WeekdayKey =
+  | 'sun'
+  | 'mon'
+  | 'tue'
+  | 'wed'
+  | 'thu'
+  | 'fri'
+  | 'sat'
 
 export type AppLocale = 'pt-BR' | 'en'
 
@@ -35,6 +51,25 @@ export const APP_LOCALES: { id: AppLocale; labelKey: string }[] = [
   { id: 'en', labelKey: 'settings.languageEn' },
 ]
 
+export const WEEKDAY_KEYS: WeekdayKey[] = [
+  'sun',
+  'mon',
+  'tue',
+  'wed',
+  'thu',
+  'fri',
+  'sat',
+]
+
+export interface ReminderWindow {
+  startHour: number
+  startMinute: number
+  endHour: number
+  endMinute: number
+}
+
+export type WeeklyReminderWindows = Record<WeekdayKey, ReminderWindow>
+
 export interface NotificationSettings {
   enabled: boolean
   intervalMinutes: number
@@ -44,6 +79,9 @@ export interface NotificationSettings {
   /** Fim da janela de lembretes (hora local) */
   windowEndHour: number
   windowEndMinute: number
+  useWeekdayWindows: boolean
+  weeklyWindows: WeeklyReminderWindows
+  adaptiveEnabled: boolean
   /** Não notificar se a meta do dia já foi batida */
   pauseWhenGoalReached: boolean
 }
@@ -65,6 +103,17 @@ export const DEFAULT_NOTIFICATIONS: NotificationSettings = {
   windowStartMinute: 0,
   windowEndHour: 22,
   windowEndMinute: 0,
+  useWeekdayWindows: false,
+  weeklyWindows: {
+    sun: { startHour: 8, startMinute: 0, endHour: 22, endMinute: 0 },
+    mon: { startHour: 8, startMinute: 0, endHour: 22, endMinute: 0 },
+    tue: { startHour: 8, startMinute: 0, endHour: 22, endMinute: 0 },
+    wed: { startHour: 8, startMinute: 0, endHour: 22, endMinute: 0 },
+    thu: { startHour: 8, startMinute: 0, endHour: 22, endMinute: 0 },
+    fri: { startHour: 8, startMinute: 0, endHour: 22, endMinute: 0 },
+    sat: { startHour: 8, startMinute: 0, endHour: 22, endMinute: 0 },
+  },
+  adaptiveEnabled: true,
   pauseWhenGoalReached: true,
 }
 
@@ -110,6 +159,20 @@ export const NOTIFICATION_INTERVALS = [
   { minutes: 120, label: '2 horas' },
   { minutes: 180, label: '3 horas' },
 ] as const
+
+export const ACTIVITY_LEVELS: { id: ActivityLevel; labelKey: string }[] = [
+  { id: 'low', labelKey: 'settings.activityLow' },
+  { id: 'moderate', labelKey: 'settings.activityModerate' },
+  { id: 'high', labelKey: 'settings.activityHigh' },
+]
+
+export const HEAT_LEVELS: { id: HeatLevel; labelKey: string }[] = [
+  { id: 'mild', labelKey: 'settings.heatMild' },
+  { id: 'warm', labelKey: 'settings.heatWarm' },
+  { id: 'hot', labelKey: 'settings.heatHot' },
+]
+
+export const WEEKLY_GOAL_DAY_OPTIONS = [3, 4, 5, 6, 7] as const
 
 export const AVATARS = [
   { id: 'drop', label: 'Gota' },
